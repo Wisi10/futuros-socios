@@ -209,15 +209,21 @@ function TabComplejo({ data }) {
   const f5Revenue = useMemo(() => yearBookings.filter(b => b.type === 'F5').reduce((s, b) => s + (b.price_eur || 0), 0), [yearBookings]);
   const totalRevenue = f7Revenue + f5Revenue;
 
-  // Birthdays by month
+  // Birthdays by month (bookings + historical_sales)
   const birthdaysByMonth = useMemo(() => {
     const months = Array(12).fill(0);
     yearBookings.filter(b => b.activity_type === 'cumpleanos').forEach(b => {
       const m = getMonth(b.date);
       if (m) months[m - 1]++;
     });
+    (historicalSales || [])
+      .filter(s => s.sale_date && s.sale_date.startsWith(String(currentYear)) && s.activity_type === 'cumpleanos')
+      .forEach(s => {
+        const m = getMonth(s.sale_date);
+        if (m) months[m - 1]++;
+      });
     return months;
-  }, [yearBookings]);
+  }, [yearBookings, historicalSales, currentYear]);
 
   // Occupancy by court
   const courtHours = useMemo(() => {

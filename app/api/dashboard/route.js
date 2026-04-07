@@ -36,7 +36,7 @@ function parseDividendSheet(rows, year) {
   const montoIdx = 1;
 
   return rows.slice(1)
-    .filter(r => r[fechaIdx] && r[montoIdx])
+    .filter(r => r[fechaIdx] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[fechaIdx].trim()))
     .map(r => ({
       fecha: r[fechaIdx],
       montoTotal: parseNum(r[montoIdx]),
