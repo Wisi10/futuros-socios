@@ -1,0 +1,145 @@
+export const dynamic = 'force-dynamic';
+
+import { NextResponse } from 'next/server';
+import { supabase } from '../../lib/supabase-server';
+import { getSheetData } from '../../lib/google-sheets';
+
+const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+
+// Fetch all rows (Supabase has 1000 row limit per query)
+async function fetchAllRows(table, select = '*', filters = {}) {
+  const PAGE = 1000;
+  let all = [];
+  let from = 0;
+  while (true) {
+    let q = supabase.from(table).select(select).range(from, from + PAGE - 1);
+    for (const [key, val] of Object.entries(filters)) {
+      q = q.eq(key, val);
+    }
+    const { data, error } = await q;
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    all = all.concat(data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return all;
+}
+
+function parseDividendSheet(rows, year) {
+  if (!rows || rows.length < 2) return [];
+  const headers = rows[0];
+
+  // Find WISI $ column
+  const wisiIdx = headers.findIndex(h => h && h.trim() === 'WISI $');
+  const fechaIdx = 0;
+  const montoIdx = 1;
+
+  return rows.slice(1)
+    .filter(r => r[fechaIdx] && r[montoIdx])
+    .map(r => ({
+      fecha: r[fechaIdx],
+      montoTotal: parseNum(r[montoIdx]),
+      wisiAmount: wisiIdx >= 0 ? parseNum(r[wisiIdx]) : 0,
+      year,
+    }));
+}
+
+function parseNum(val) {
+  if (!val) return 0;
+  const s = String(val).replace(/[$,]/g, '').trim();
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+export async function GET(request) {
+  try {
+    // Verify auth
+    const authHeader = request.headers.get('authorization');
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const token = authHeader.split(' ')[1];
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
+    }
+
+    // Fetch all data in parallel
+    const [
+      bookings,
+      courts,
+      historicalSales,
+      div2024Res,
+      div2025Res,
+      div2026Res,
+      roiRes,
+      totalesRes,
+    ] = await Promise.all([
+      fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration'),
+      supabase.from('courts').select('*').order('id'),
+      fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,duration_hours'),
+      getSheetData(SHEET_ID, 'Dividendos 2024!A1:P50').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Dividendos 2025!A1:P50').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Dividendos 2026!A1:W50').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'ROI!A1:H20').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Totales Historicos!A1:G20').catch(() => ({ values: [] })),
+    ]);
+
+    // Parse dividends
+    const dividends2024 = parseDividendSheet(div2024Res.values || [], 2024);
+    const dividends2025 = parseDividendSheet(div2025Res.values || [], 2025);
+    const dividends2026 = parseDividendSheet(div2026Res.values || [], 2026);
+
+    // Parse ROI sheet
+    let roiData = null;
+    const roiRows = roiRes.values || [];
+    if (roiRows.length > 2) {
+      const roiHeaders = roiRows[2]; // Headers are on row 3
+      const wisiRow = roiRows.find(r => r[0] && r[0].toUpperCase().includes('WISI'));
+      if (wisiRow) {
+        roiData = {
+          participacion: parseNum(wisiRow[1]),
+          montoInvertido: parseNum(wisiRow[2]),
+          dividendosRecibidos: parseNum(wisiRow[3]),
+          neto: parseNum(wisiRow[4]),
+          roiPct: parseNum(wisiRow[5]),
+          mesesTotalPayback: parseNum(wisiRow[6]),
+          mesesRestantes: parseNum(wisiRow[7]),
+        };
+      }
+    }
+
+    // Parse Totales Historicos
+    let totalesData = null;
+    const totalesRows = totalesRes.values || [];
+    if (totalesRows.length > 2) {
+      const wisiRow = totalesRows.find(r => r[0] && r[0].toUpperCase().includes('WISI'));
+      if (wisiRow) {
+        totalesData = {
+          pctActual: parseNum(wisiRow[1]),
+          total2024: parseNum(wisiRow[2]),
+          total2025: parseNum(wisiRow[3]),
+          total2026: parseNum(wisiRow[4]),
+          granTotal: parseNum(wisiRow[5]),
+        };
+      }
+    }
+
+    return NextResponse.json({
+      bookings,
+      courts: courts.data || [],
+      historicalSales,
+      dividends: {
+        2024: dividends2024,
+        2025: dividends2025,
+        2026: dividends2026,
+      },
+      roi: roiData,
+      totales: totalesData,
+    });
+  } catch (err) {
+    console.error('[DASHBOARD] Error:', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
