@@ -14,49 +14,15 @@ export default function RootLayout({ children }) {
     <html lang="es">
       <head>
         <script src="https://cdn.tailwindcss.com"></script>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              tailwind.config = {
-                theme: {
-                  extend: {
-                    colors: {
-                      brand: {
-                        gold: '#B8963E',
-                        'gold-light': '#D4B96A',
-                        brown: '#3D2B1F',
-                        'brown-dark': '#2A1D15',
-                        cream: '#C4B8A8',
-                        'cream-light': '#F5F1EB',
-                        'cream-dark': '#A89A8A',
-                      }
-                    },
-                    fontFamily: {
-                      serif: ['Georgia', 'Cambria', 'Times New Roman', 'serif'],
-                    }
-                  }
-                }
-              }
-            `,
-          }}
-        />
         <style
           dangerouslySetInnerHTML={{
             __html: `
               body {
-                font-family: Georgia, Cambria, 'Times New Roman', serif;
+                font-family: system-ui, -apple-system, sans-serif;
                 -webkit-font-smoothing: antialiased;
-              }
-              .stat-card {
-                background: rgba(255,255,255,0.7);
-                backdrop-filter: blur(12px);
-                border: 1px solid rgba(196,184,168,0.3);
-              }
-              .gold-gradient {
-                background: linear-gradient(135deg, #B8963E 0%, #D4B96A 100%);
-              }
-              .brown-gradient {
-                background: linear-gradient(135deg, #3D2B1F 0%, #5A4030 100%);
+                background: #F5F0E8;
+                color: #2C2C2C;
+                margin: 0;
               }
               @keyframes fadeIn {
                 from { opacity: 0; transform: translateY(8px); }
@@ -64,14 +30,6 @@ export default function RootLayout({ children }) {
               }
               .fade-in {
                 animation: fadeIn 0.4s ease-out forwards;
-              }
-              .tab-active {
-                border-bottom: 2px solid #B8963E;
-                color: #3D2B1F;
-              }
-              .tab-inactive {
-                border-bottom: 2px solid transparent;
-                color: #A89A8A;
               }
               input:focus {
                 outline: none;
@@ -82,7 +40,7 @@ export default function RootLayout({ children }) {
           }}
         />
       </head>
-      <body className="bg-brand-cream-light text-brand-brown min-h-screen">
+      <body>
         {children}
       </body>
     </html>

@@ -8,16 +8,21 @@ import {
   PointElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Bar, Line, Doughnut } from 'react-chartjs-2';
-import {
-  Building2, User, TrendingUp, LogOut, Loader2,
-  DollarSign, Calendar, BarChart3, Target, ArrowUpRight,
-  ArrowDownRight, Trophy, Zap, ChevronRight
-} from 'lucide-react';
+import { Loader2, LogOut } from 'lucide-react';
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Tooltip, Legend, Filler
 );
+
+// ─── Theme ──────────────────────────────────────────────────
+const T = {
+  bg:"#F5F0E8", bg2:"#EDE8DF", card:"#FFF", gold:"#B8963E", gd:"#8B6914",
+  brn:"#3D2B1F", ch:"#2C2C2C", mu:"#8C7E6F", dv:"#D4C9B8",
+  gr:"#2E7D32", rd:"#B71C1C",
+  mo:"'Courier New',monospace", se:"'Georgia','Times New Roman',serif",
+  sa:"system-ui,-apple-system,sans-serif"
+};
 
 // ─── Constants ──────────────────────────────────────────────
 const WISI_INVESTMENT = 89888;
@@ -35,26 +40,97 @@ function fmtPct(n) {
   return Number(n).toFixed(1) + '%';
 }
 
-function getYear(dateStr) {
-  if (!dateStr) return null;
-  if (dateStr.includes('/')) {
-    const parts = dateStr.split('/');
-    return parseInt(parts[2]);
-  }
-  return parseInt(dateStr.substring(0, 4));
-}
-
 function getMonth(dateStr) {
   if (!dateStr) return null;
   if (dateStr.includes('-')) return parseInt(dateStr.substring(5, 7));
-  if (dateStr.includes('/')) {
-    const parts = dateStr.split('/');
-    return parseInt(parts[1]);
-  }
+  if (dateStr.includes('/')) return parseInt(dateStr.split('/')[1]);
   return null;
 }
 
-// ─── Login Screen ──────────────────────────────────────────
+function getDay(dateStr) {
+  if (!dateStr) return null;
+  if (dateStr.includes('-')) return parseInt(dateStr.substring(8, 10));
+  return null;
+}
+
+function cmpText(val, pct) {
+  if (pct == null || isNaN(pct)) return '';
+  const sign = pct >= 0 ? '+' : '';
+  return `${sign}${pct.toFixed(1)}%`;
+}
+
+// ─── Shared Styles ──────────────────────────────────────────
+const S = {
+  card: { background: T.card, border: `1px solid ${T.dv}`, borderRadius: 8, padding: 24 },
+  divider: { borderTop: `1px solid ${T.dv}`, margin: '32px 0' },
+  label: { color: T.mu, fontSize: 9, textTransform: 'uppercase', letterSpacing: 3, marginBottom: 6, fontFamily: T.sa },
+  bigNum: { color: T.gold, fontSize: 24, fontWeight: 400, fontFamily: T.se, letterSpacing: -1, lineHeight: 1 },
+  sub: { color: T.mu, fontSize: 11, marginTop: 6, fontFamily: T.sa },
+  mono: { fontFamily: T.mo, fontWeight: 700, fontSize: 12 },
+  rowLabel: { color: T.ch, fontSize: 12, fontFamily: T.sa },
+  row: { display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: `1px solid ${T.bg2}` },
+};
+
+// ─── Custom Tooltip ─────────────────────────────────────────
+const Tip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background: T.card, border: `1px solid ${T.dv}`, borderRadius: 8, padding: '10px 16px', boxShadow: '0 4px 20px rgba(0,0,0,.08)' }}>
+      <div style={{ color: T.gd, fontWeight: 700, fontSize: 12, fontFamily: T.sa }}>{label}</div>
+      {payload.map((p, i) => (
+        <div key={i} style={{ color: T.ch, fontSize: 12, fontFamily: T.sa }}>
+          {p.name}: <b style={{ fontFamily: T.mo }}>${p.value?.toLocaleString()}</b>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// ─── Chart Options ──────────────────────────────────────────
+const baseChartOpts = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: {
+    legend: { display: false },
+    tooltip: { enabled: false },
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { font: { family: 'system-ui', size: 10 }, color: T.mu } },
+    y: {
+      grid: { color: 'rgba(184,150,62,0.1)' },
+      ticks: { font: { family: 'system-ui', size: 10 }, color: T.mu, callback: v => `$${(v / 1000).toFixed(0)}K` },
+    },
+  },
+};
+
+// ─── KPI Card ───────────────────────────────────────────────
+function KPI({ label, value, comparison, color }) {
+  const valColor = color || T.gold;
+  const cmpColor = comparison && comparison.startsWith('+') ? T.gr : comparison && comparison.startsWith('-') ? T.rd : T.mu;
+  return (
+    <div style={{ textAlign: 'center', flex: 1, minWidth: 130, padding: '12px 0' }}>
+      <div style={S.label}>{label}</div>
+      <div style={{ ...S.bigNum, color: valColor }}>{value}</div>
+      {comparison && <div style={{ ...S.sub, color: cmpColor }}>{comparison}</div>}
+    </div>
+  );
+}
+
+// ─── Custom Legend ───────────────────────────────────────────
+function ChartLegend({ items }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 12 }}>
+      {items.map((item, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div style={{ width: 10, height: 3, borderRadius: 2, background: item.color, ...(item.dashed ? { backgroundImage: `repeating-linear-gradient(90deg, ${item.color} 0, ${item.color} 4px, transparent 4px, transparent 8px)`, background: 'transparent' } : {}) }} />
+          <span style={{ fontSize: 10, color: T.mu, fontFamily: T.sa }}>{item.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Login Screen ───────────────────────────────────────────
 function LoginScreen({ onLogin }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -74,40 +150,32 @@ function LoginScreen({ onLogin }) {
     onLogin(data.session);
   }
 
+  const inputStyle = {
+    width: '100%', padding: '12px 16px', borderRadius: 8,
+    border: `1px solid ${T.dv}`, background: T.card, color: T.ch,
+    fontSize: 13, fontFamily: T.sa, boxSizing: 'border-box',
+  };
+
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 bg-brand-cream-light">
-      <div className="w-full max-w-sm fade-in">
-        <div className="text-center mb-10">
-          <div className="w-16 h-16 gold-gradient rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <Building2 className="w-8 h-8 text-white" />
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, background: T.bg }}>
+      <div className="fade-in" style={{ width: '100%', maxWidth: 340 }}>
+        <div style={{ textAlign: 'center', marginBottom: 40 }}>
+          <div style={{ width: 48, height: 48, background: T.gold, borderRadius: 12, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+            <span style={{ color: '#FFF', fontSize: 20, fontWeight: 700, fontFamily: T.se }}>F</span>
           </div>
-          <h1 className="text-2xl font-bold text-brand-brown">Futuros Socios</h1>
-          <p className="text-brand-cream-dark mt-1 text-sm">Dashboard de Inversi&oacute;n</p>
+          <h1 style={{ fontSize: 20, fontWeight: 700, color: T.ch, fontFamily: T.se, margin: 0 }}>Futuros Socios</h1>
+          <p style={{ color: T.mu, fontSize: 11, marginTop: 4, fontFamily: T.sa }}>Dashboard de Inversion</p>
         </div>
-        <form onSubmit={handleLogin} className="space-y-4">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-brand-cream bg-white text-brand-brown placeholder-brand-cream-dark text-sm"
-            required
-          />
-          <input
-            type="password"
-            placeholder="Contrase&ntilde;a"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-brand-cream bg-white text-brand-brown placeholder-brand-cream-dark text-sm"
-            required
-          />
-          {error && <p className="text-red-600 text-sm text-center">{error}</p>}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full py-3 rounded-xl gold-gradient text-white font-semibold text-sm shadow-md hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Entrar'}
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} style={inputStyle} required />
+          <input type="password" placeholder="Contrasena" value={password} onChange={e => setPassword(e.target.value)} style={inputStyle} required />
+          {error && <p style={{ color: T.rd, fontSize: 12, textAlign: 'center', margin: 0, fontFamily: T.sa }}>{error}</p>}
+          <button type="submit" disabled={loading} style={{
+            width: '100%', padding: 12, borderRadius: 8, border: 'none', background: T.gold, color: '#FFF',
+            fontSize: 12, fontWeight: 600, fontFamily: T.sa, cursor: 'pointer', letterSpacing: 1, textTransform: 'uppercase',
+            opacity: loading ? 0.5 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          }}>
+            {loading ? <Loader2 size={14} className="animate-spin" /> : 'ENTRAR'}
           </button>
         </form>
       </div>
@@ -115,86 +183,26 @@ function LoginScreen({ onLogin }) {
   );
 }
 
-// ─── Stat Card ──────────────────────────────────────────────
-function StatCard({ label, value, sub, icon: Icon, trend, color = 'gold' }) {
-  const colors = {
-    gold: 'from-amber-50 to-orange-50 border-amber-200',
-    green: 'from-emerald-50 to-green-50 border-emerald-200',
-    blue: 'from-blue-50 to-indigo-50 border-blue-200',
-    purple: 'from-purple-50 to-fuchsia-50 border-purple-200',
-  };
-  return (
-    <div className={`rounded-2xl p-4 bg-gradient-to-br ${colors[color]} border transition hover:shadow-md`}>
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-xs font-medium text-brand-cream-dark uppercase tracking-wide">{label}</span>
-        {Icon && <Icon className="w-4 h-4 text-brand-cream-dark" />}
-      </div>
-      <div className="text-xl font-bold text-brand-brown">{value}</div>
-      {(sub || trend != null) && (
-        <div className="flex items-center gap-1 mt-1">
-          {trend != null && (
-            trend >= 0
-              ? <ArrowUpRight className="w-3 h-3 text-emerald-600" />
-              : <ArrowDownRight className="w-3 h-3 text-red-500" />
-          )}
-          <span className={`text-xs ${trend != null && trend >= 0 ? 'text-emerald-600' : trend != null ? 'text-red-500' : 'text-brand-cream-dark'}`}>
-            {sub}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Section Header ──────────────────────────────────────────
-function SectionHeader({ title, subtitle }) {
-  return (
-    <div className="mb-4">
-      <h2 className="text-lg font-bold text-brand-brown">{title}</h2>
-      {subtitle && <p className="text-xs text-brand-cream-dark mt-0.5">{subtitle}</p>}
-    </div>
-  );
-}
-
-// ─── Chart defaults ──────────────────────────────────────────
-const chartDefaults = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      backgroundColor: '#3D2B1F',
-      titleFont: { family: 'Georgia' },
-      bodyFont: { family: 'Georgia' },
-      cornerRadius: 8,
-      padding: 10,
-    }
-  },
-  scales: {
-    x: {
-      grid: { display: false },
-      ticks: { font: { family: 'Georgia', size: 11 }, color: '#A89A8A' }
-    },
-    y: {
-      grid: { color: 'rgba(196,184,168,0.2)' },
-      ticks: { font: { family: 'Georgia', size: 11 }, color: '#A89A8A' }
-    }
-  }
-};
-
-// ─── Tab 1: El Complejo ──────────────────────────────────────
+// ─── Tab 1: El Complejo ─────────────────────────────────────
 function TabComplejo({ data }) {
   const { bookings, courts, historicalSales } = data;
   const now = new Date();
   const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
 
-  // Current year bookings
+  // Current year bookings (exclude blocked)
   const yearBookings = useMemo(() =>
-    bookings.filter(b => b.date && b.date.startsWith(String(currentYear))),
+    bookings.filter(b => b.date && b.date.startsWith(String(currentYear)) && b.activity_type !== 'blocked'),
     [bookings, currentYear]
   );
 
-  // Revenue by month (current year)
+  // Previous year bookings (exclude blocked)
+  const prevYearBookings = useMemo(() =>
+    bookings.filter(b => b.date && b.date.startsWith(String(currentYear - 1)) && b.activity_type !== 'blocked'),
+    [bookings, currentYear]
+  );
+
+  // Revenue by month
   const monthlyRevenue = useMemo(() => {
     const months = Array(12).fill(0);
     yearBookings.forEach(b => {
@@ -204,12 +212,48 @@ function TabComplejo({ data }) {
     return months;
   }, [yearBookings]);
 
+  const prevMonthlyRevenue = useMemo(() => {
+    const months = Array(12).fill(0);
+    prevYearBookings.forEach(b => {
+      const m = getMonth(b.date);
+      if (m) months[m - 1] += (b.price_eur || 0);
+    });
+    return months;
+  }, [prevYearBookings]);
+
+  // This month vs last month vs same month last year
+  const thisMonthRev = monthlyRevenue[currentMonth - 1] || 0;
+  const lastMonthRev = currentMonth > 1 ? (monthlyRevenue[currentMonth - 2] || 0) : 0;
+  const sameMonthLastYear = prevMonthlyRevenue[currentMonth - 1] || 0;
+  const momGrowth = lastMonthRev > 0 ? ((thisMonthRev - lastMonthRev) / lastMonthRev * 100) : 0;
+  const yoyMonthGrowth = sameMonthLastYear > 0 ? ((thisMonthRev - sameMonthLastYear) / sameMonthLastYear * 100) : 0;
+
   // F7 vs F5
   const f7Revenue = useMemo(() => yearBookings.filter(b => b.type === 'F7').reduce((s, b) => s + (b.price_eur || 0), 0), [yearBookings]);
   const f5Revenue = useMemo(() => yearBookings.filter(b => b.type === 'F5').reduce((s, b) => s + (b.price_eur || 0), 0), [yearBookings]);
   const totalRevenue = f7Revenue + f5Revenue;
 
-  // Birthdays by month (bookings + historical_sales)
+  // YTD comparison
+  const prevYearSameMonths = prevYearBookings
+    .filter(b => getMonth(b.date) <= currentMonth)
+    .reduce((s, b) => s + (b.price_eur || 0), 0);
+  const yoyGrowth = prevYearSameMonths > 0 ? ((totalRevenue - prevYearSameMonths) / prevYearSameMonths * 100) : 0;
+
+  // Reservations this week vs last week
+  const todayDate = now.toISOString().slice(0, 10);
+  const dayOfWeek = now.getDay() || 7;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - dayOfWeek + 1);
+  const lastWeekStart = new Date(weekStart);
+  lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+  const lastWeekEnd = new Date(weekStart);
+  lastWeekEnd.setDate(lastWeekEnd.getDate() - 1);
+
+  const thisWeekBookings = yearBookings.filter(b => b.date >= weekStart.toISOString().slice(0, 10) && b.date <= todayDate).length;
+  const lastWeekBookings = yearBookings.filter(b => b.date >= lastWeekStart.toISOString().slice(0, 10) && b.date <= lastWeekEnd.toISOString().slice(0, 10)).length;
+  const weekGrowth = lastWeekBookings > 0 ? ((thisWeekBookings - lastWeekBookings) / lastWeekBookings * 100) : 0;
+
+  // Birthdays (bookings + historical_sales)
   const birthdaysByMonth = useMemo(() => {
     const months = Array(12).fill(0);
     yearBookings.filter(b => b.activity_type === 'cumpleanos').forEach(b => {
@@ -225,6 +269,10 @@ function TabComplejo({ data }) {
     return months;
   }, [yearBookings, historicalSales, currentYear]);
 
+  const totalBirthdays = birthdaysByMonth.reduce((a, b) => a + b, 0);
+  const avgBdayMonth = currentMonth > 0 ? totalBirthdays / currentMonth : 0;
+  const bday2025Avg = 10; // ~118 in 2025 / 12
+
   // Occupancy by court
   const courtHours = useMemo(() => {
     const map = {};
@@ -237,7 +285,23 @@ function TabComplejo({ data }) {
     return Object.values(map).sort((a, b) => b.hours - a.hours);
   }, [yearBookings, courts]);
 
-  // Activity breakdown
+  // Previous month occupancy for comparison
+  const prevMonthHours = useMemo(() => {
+    const pm = currentMonth > 1 ? currentMonth - 1 : 12;
+    return yearBookings
+      .filter(b => getMonth(b.date) === pm)
+      .reduce((s, b) => s + ((b.court_ids || []).length * (b.duration || 0)), 0);
+  }, [yearBookings, currentMonth]);
+
+  const thisMonthHours = useMemo(() => {
+    return yearBookings
+      .filter(b => getMonth(b.date) === currentMonth)
+      .reduce((s, b) => s + ((b.court_ids || []).length * (b.duration || 0)), 0);
+  }, [yearBookings, currentMonth]);
+
+  const occGrowth = prevMonthHours > 0 ? ((thisMonthHours - prevMonthHours) / prevMonthHours * 100) : 0;
+
+  // Activity breakdown (filtered, no blocked)
   const activityBreakdown = useMemo(() => {
     const map = {};
     yearBookings.forEach(b => {
@@ -247,132 +311,141 @@ function TabComplejo({ data }) {
     return map;
   }, [yearBookings]);
 
+  const activityTotal = Object.values(activityBreakdown).reduce((s, v) => s + v, 0);
+  const activityLabels = { alquiler: 'Alquiler', cumpleanos: 'Cumpleanos', academia: 'Academia', torneo: 'Torneo', evento: 'Evento', otro: 'Otro' };
+  const activityColors = ['#B8963E', '#3D2B1F', '#D4C9B8', '#8B6914', '#8C7E6F', '#A89A8A'];
+
   const totalBookingsCount = yearBookings.length;
-  const totalBirthdays = birthdaysByMonth.reduce((a, b) => a + b, 0);
-  const completedMonths = now.getMonth() + 1;
-  const avgMonthly = completedMonths > 0 ? totalRevenue / completedMonths : 0;
-
-  // Previous year comparison
-  const prevYearBookings = useMemo(() =>
-    bookings.filter(b => b.date && b.date.startsWith(String(currentYear - 1))),
-    [bookings, currentYear]
-  );
-  const prevYearRev = prevYearBookings.reduce((s, b) => s + (b.price_eur || 0), 0);
-  const prevYearSameMonths = prevYearBookings
-    .filter(b => getMonth(b.date) <= completedMonths)
-    .reduce((s, b) => s + (b.price_eur || 0), 0);
-  const yoyGrowth = prevYearSameMonths > 0 ? ((totalRevenue - prevYearSameMonths) / prevYearSameMonths * 100) : 0;
-
-  const activityLabels = { alquiler: 'Alquiler', cumpleanos: 'Cumpleanos', academia: 'Academia', torneo: 'Torneo', evento: 'Evento' };
-  const activityColors = ['#B8963E', '#3D2B1F', '#C4B8A8', '#D4B96A', '#8B7355'];
 
   return (
-    <div className="space-y-6 fade-in">
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label="Ingresos YTD" value={fmt(totalRevenue)} sub={`${fmtPct(yoyGrowth)} vs ${currentYear - 1}`} icon={DollarSign} trend={yoyGrowth} color="gold" />
-        <StatCard label="Promedio/Mes" value={fmt(avgMonthly)} sub={`${completedMonths} meses`} icon={BarChart3} color="blue" />
-        <StatCard label="Reservas YTD" value={totalBookingsCount.toLocaleString()} sub={`F7: ${yearBookings.filter(b=>b.type==='F7').length} | F5: ${yearBookings.filter(b=>b.type==='F5').length}`} icon={Calendar} color="purple" />
-        <StatCard label="Cumpleanos" value={totalBirthdays} sub={`~${(totalBirthdays / Math.max(completedMonths,1)).toFixed(1)}/mes`} icon={Trophy} color="green" />
+    <div className="fade-in">
+      {/* KPIs Row */}
+      <div style={{ ...S.card, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 0 }}>
+        <KPI
+          label={`INGRESOS ${MONTHS_ES[currentMonth - 1].toUpperCase()}`}
+          value={fmt(thisMonthRev)}
+          comparison={`${cmpText(thisMonthRev, momGrowth)} vs mes ant. | ${cmpText(thisMonthRev, yoyMonthGrowth)} vs ${MONTHS_ES[currentMonth - 1]} ${currentYear - 1}`}
+        />
+        <div style={{ width: 1, background: T.dv, alignSelf: 'stretch', margin: '8px 0' }} />
+        <KPI
+          label="INGRESOS YTD"
+          value={fmt(totalRevenue)}
+          comparison={`${cmpText(totalRevenue, yoyGrowth)} vs ${currentYear - 1}`}
+        />
+      </div>
+
+      <div style={{ ...S.card, marginTop: 12, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 0 }}>
+        <KPI
+          label="RESERVAS SEMANA"
+          value={thisWeekBookings.toString()}
+          comparison={`${cmpText(thisWeekBookings, weekGrowth)} vs semana ant.`}
+          color={T.ch}
+        />
+        <div style={{ width: 1, background: T.dv, alignSelf: 'stretch', margin: '8px 0' }} />
+        <KPI
+          label="CUMPLEANOS YTD"
+          value={totalBirthdays.toString()}
+          comparison={`${avgBdayMonth.toFixed(1)}/mes (2025: ${bday2025Avg}/mes)`}
+          color={T.ch}
+        />
+        <div style={{ width: 1, background: T.dv, alignSelf: 'stretch', margin: '8px 0' }} />
+        <KPI
+          label={`OCUPACION ${MONTHS_ES[currentMonth - 1].toUpperCase()}`}
+          value={`${thisMonthHours}h`}
+          comparison={`${cmpText(thisMonthHours, occGrowth)} vs mes ant.`}
+          color={T.ch}
+        />
       </div>
 
       {/* F7 vs F5 */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="F7 vs F5" subtitle={`Ingresos ${currentYear}`} />
-        <div className="flex items-center gap-4 mb-3">
-          <div className="flex-1">
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-medium">F7</span>
-              <span>{fmt(f7Revenue)} ({totalRevenue > 0 ? fmtPct(f7Revenue/totalRevenue*100) : '0%'})</span>
-            </div>
-            <div className="h-3 bg-brand-cream rounded-full overflow-hidden">
-              <div className="h-full gold-gradient rounded-full" style={{ width: `${totalRevenue > 0 ? f7Revenue/totalRevenue*100 : 0}%` }} />
-            </div>
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>F7 VS F5</div>
+        <div style={{ marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 12, fontFamily: T.sa, fontWeight: 600, color: T.ch }}>F7</span>
+            <span style={{ fontSize: 12, fontFamily: T.mo, color: T.ch }}>{fmt(f7Revenue)} ({totalRevenue > 0 ? fmtPct(f7Revenue / totalRevenue * 100) : '0%'})</span>
+          </div>
+          <div style={{ background: T.bg2, borderRadius: 20, height: 5 }}>
+            <div style={{ width: `${totalRevenue > 0 ? f7Revenue / totalRevenue * 100 : 0}%`, height: '100%', background: T.gold, borderRadius: 20 }} />
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex-1">
-            <div className="flex justify-between text-xs mb-1">
-              <span className="font-medium">F5</span>
-              <span>{fmt(f5Revenue)} ({totalRevenue > 0 ? fmtPct(f5Revenue/totalRevenue*100) : '0%'})</span>
-            </div>
-            <div className="h-3 bg-brand-cream rounded-full overflow-hidden">
-              <div className="h-full brown-gradient rounded-full" style={{ width: `${totalRevenue > 0 ? f5Revenue/totalRevenue*100 : 0}%` }} />
-            </div>
+        <div style={{ marginTop: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontSize: 12, fontFamily: T.sa, fontWeight: 600, color: T.ch }}>F5</span>
+            <span style={{ fontSize: 12, fontFamily: T.mo, color: T.ch }}>{fmt(f5Revenue)} ({totalRevenue > 0 ? fmtPct(f5Revenue / totalRevenue * 100) : '0%'})</span>
+          </div>
+          <div style={{ background: T.bg2, borderRadius: 20, height: 5 }}>
+            <div style={{ width: `${totalRevenue > 0 ? f5Revenue / totalRevenue * 100 : 0}%`, height: '100%', background: T.dv, borderRadius: 20 }} />
           </div>
         </div>
       </div>
 
       {/* Monthly Revenue Chart */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Tendencia Mensual" subtitle={`Ingresos REF por mes — ${currentYear}`} />
-        <div className="h-52">
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>TENDENCIA MENSUAL — {currentYear}</div>
+        <div style={{ height: 200, marginTop: 16 }}>
           <Bar
             data={{
               labels: MONTHS_ES,
               datasets: [{
                 data: monthlyRevenue,
-                backgroundColor: monthlyRevenue.map((_, i) => i < completedMonths ? '#B8963E' : 'rgba(184,150,62,0.2)'),
-                borderRadius: 6,
-                barThickness: 18,
+                backgroundColor: monthlyRevenue.map((_, i) => i < currentMonth ? T.gold : 'rgba(184,150,62,0.15)'),
+                borderRadius: 4,
+                barThickness: 16,
               }]
             }}
             options={{
-              ...chartDefaults,
-              scales: {
-                ...chartDefaults.scales,
-                y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => '$' + (v/1000).toFixed(0) + 'k' } }
-              }
+              ...baseChartOpts,
+              plugins: { ...baseChartOpts.plugins, tooltip: { enabled: true, callbacks: { label: c => `$${c.raw?.toLocaleString()}` } } },
             }}
           />
         </div>
       </div>
 
       {/* Birthdays by Month */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Cumpleanos por Mes" subtitle={currentYear.toString()} />
-        <div className="h-40">
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>CUMPLEANOS POR MES — {currentYear}</div>
+        <div style={{ height: 160, marginTop: 16 }}>
           <Bar
             data={{
               labels: MONTHS_ES,
               datasets: [{
                 data: birthdaysByMonth,
-                backgroundColor: '#3D2B1F',
-                borderRadius: 6,
-                barThickness: 14,
+                backgroundColor: T.brn,
+                borderRadius: 4,
+                barThickness: 12,
               }]
             }}
             options={{
-              ...chartDefaults,
+              ...baseChartOpts,
               scales: {
-                ...chartDefaults.scales,
-                y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, stepSize: 1 } }
-              }
+                ...baseChartOpts.scales,
+                y: { ...baseChartOpts.scales.y, ticks: { ...baseChartOpts.scales.y.ticks, stepSize: 1, callback: v => v } },
+              },
+              plugins: { ...baseChartOpts.plugins, tooltip: { enabled: true, callbacks: { label: c => `${c.raw} cumpleanos` } } },
             }}
           />
         </div>
       </div>
 
       {/* Court Occupancy */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Ocupacion por Cancha" subtitle={`Horas reservadas — ${currentYear}`} />
-        <div className="space-y-2">
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>OCUPACION POR CANCHA — {currentYear}</div>
+        <div style={{ marginTop: 16 }}>
           {courtHours.map((c, i) => {
             const max = courtHours[0]?.hours || 1;
             return (
-              <div key={i}>
-                <div className="flex justify-between text-xs mb-0.5">
-                  <span className="font-medium">{c.name} <span className="text-brand-cream-dark">({c.type})</span></span>
-                  <span>{c.hours}h</span>
+              <div key={i} style={{ marginBottom: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                  <span style={{ fontSize: 12, fontFamily: T.sa, color: T.ch }}>{c.name} <span style={{ color: T.mu }}>({c.type})</span></span>
+                  <span style={S.mono}>{c.hours}h</span>
                 </div>
-                <div className="h-2 bg-brand-cream rounded-full overflow-hidden">
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${(c.hours / max) * 100}%`,
-                      background: c.type === 'F7' ? '#B8963E' : '#3D2B1F'
-                    }}
-                  />
+                <div style={{ background: T.bg2, borderRadius: 20, height: 5 }}>
+                  <div style={{ width: `${(c.hours / max) * 100}%`, height: '100%', borderRadius: 20, background: c.type === 'F7' ? T.gold : T.dv }} />
                 </div>
               </div>
             );
@@ -381,10 +454,11 @@ function TabComplejo({ data }) {
       </div>
 
       {/* Activity Breakdown */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Tipo de Actividad" subtitle="Distribucion de ingresos" />
-        <div className="flex items-center gap-6">
-          <div className="w-32 h-32">
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>TIPO DE ACTIVIDAD</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 24, marginTop: 16 }}>
+          <div style={{ width: 120, height: 120 }}>
             <Doughnut
               data={{
                 labels: Object.keys(activityBreakdown).map(k => activityLabels[k] || k),
@@ -394,18 +468,18 @@ function TabComplejo({ data }) {
                   borderWidth: 0,
                 }]
               }}
-              options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, cutout: '65%' }}
+              options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, cutout: '65%' }}
             />
           </div>
-          <div className="flex-1 space-y-1.5">
+          <div style={{ flex: 1 }}>
             {Object.entries(activityBreakdown)
               .sort((a, b) => b[1] - a[1])
               .map(([key, val], i) => (
-                <div key={key} className="flex items-center gap-2 text-xs">
-                  <div className="w-2.5 h-2.5 rounded-full" style={{ background: activityColors[i] }} />
-                  <span className="flex-1">{activityLabels[key] || key}</span>
-                  <span className="font-medium">{fmt(val)}</span>
-                  <span className="text-brand-cream-dark">{fmtPct(val/totalRevenue*100)}</span>
+                <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <div style={{ width: 8, height: 8, borderRadius: 4, background: activityColors[i], flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 11, color: T.ch, fontFamily: T.sa }}>{activityLabels[key] || key}</span>
+                  <span style={S.mono}>{fmt(val)}</span>
+                  <span style={{ fontSize: 10, color: T.mu, fontFamily: T.sa, minWidth: 36, textAlign: 'right' }}>{activityTotal > 0 ? fmtPct(val / activityTotal * 100) : '0%'}</span>
                 </div>
               ))}
           </div>
@@ -415,28 +489,22 @@ function TabComplejo({ data }) {
   );
 }
 
-// ─── Tab 2: Mi Participacion ─────────────────────────────────
+// ─── Tab 2: Mi Participacion ────────────────────────────────
 function TabParticipacion({ data }) {
   const { dividends, roi, totales } = data;
   const now = new Date();
   const currentYear = now.getFullYear();
   const completedMonths = now.getMonth() + 1;
 
-  // Flatten all dividends for WISI
   const allDivs = [...(dividends[2024] || []), ...(dividends[2025] || []), ...(dividends[2026] || [])];
   const totalDividends = roi?.dividendosRecibidos || allDivs.reduce((s, d) => s + d.wisiAmount, 0);
   const invested = roi?.montoInvertido || WISI_INVESTMENT;
   const roiPct = roi?.roiPct || (invested > 0 ? (totalDividends / invested * 100) : 0);
   const paybackPct = Math.min(100, (totalDividends / invested) * 100);
 
-  // YTD dividends
   const ytdDivs = (dividends[currentYear] || []).reduce((s, d) => s + d.wisiAmount, 0);
-  const prevYearDivs = totales?.total2025 || (dividends[currentYear - 1] || []).reduce((s, d) => s + d.wisiAmount, 0);
   const prevYearSameMonths = (dividends[currentYear - 1] || [])
-    .filter(d => {
-      const m = getMonth(d.fecha);
-      return m && m <= completedMonths;
-    })
+    .filter(d => { const m = getMonth(d.fecha); return m && m <= completedMonths; })
     .reduce((s, d) => s + d.wisiAmount, 0);
 
   const ytdGrowth = prevYearSameMonths > 0 ? ((ytdDivs - prevYearSameMonths) / prevYearSameMonths * 100) : 0;
@@ -444,7 +512,7 @@ function TabParticipacion({ data }) {
   const remaining = invested - totalDividends;
   const monthsToPayback = avgMonthly > 0 ? Math.ceil(remaining / avgMonthly) : null;
 
-  // Monthly dividends trend (current year)
+  // Monthly dividends (current year)
   const monthlyDivs = useMemo(() => {
     const months = Array(12).fill(0);
     (dividends[currentYear] || []).forEach(d => {
@@ -454,7 +522,7 @@ function TabParticipacion({ data }) {
     return months;
   }, [dividends, currentYear]);
 
-  // Cumulative dividends by year for line chart
+  // Yearly totals
   const yearlyTotals = [
     totales?.total2024 || (dividends[2024] || []).reduce((s, d) => s + d.wisiAmount, 0),
     totales?.total2025 || (dividends[2025] || []).reduce((s, d) => s + d.wisiAmount, 0),
@@ -462,126 +530,130 @@ function TabParticipacion({ data }) {
   ];
 
   return (
-    <div className="space-y-6 fade-in">
+    <div className="fade-in">
       {/* Hero */}
-      <div className="brown-gradient rounded-2xl p-5 text-white">
-        <div className="flex items-center justify-between mb-1">
-          <span className="text-xs uppercase tracking-wider opacity-70">WISI — {WISI_PCT}%</span>
-          <span className="text-xs bg-white/20 px-2 py-0.5 rounded-full">{currentYear}</span>
+      <div style={{ background: T.brn, borderRadius: 8, padding: 24, color: '#FFF' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+          <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: 3, opacity: 0.6, fontFamily: T.sa }}>WISI — {WISI_PCT}%</span>
+          <span style={{ fontSize: 10, background: 'rgba(255,255,255,0.15)', padding: '2px 8px', borderRadius: 10, fontFamily: T.sa }}>{currentYear}</span>
         </div>
-        <div className="text-3xl font-bold mb-1">{fmt(totalDividends, 0)}</div>
-        <div className="text-sm opacity-70">Total dividendos recibidos</div>
-        <div className="mt-4 flex gap-4">
+        <div style={{ fontSize: 32, fontWeight: 400, fontFamily: T.se, letterSpacing: -1, lineHeight: 1, marginBottom: 4 }}>{fmt(totalDividends)}</div>
+        <div style={{ fontSize: 11, opacity: 0.6, fontFamily: T.sa }}>Total dividendos recibidos</div>
+        <div style={{ display: 'flex', gap: 24, marginTop: 20 }}>
           <div>
-            <div className="text-xs opacity-60">Invertido</div>
-            <div className="font-semibold">{fmt(invested)}</div>
+            <div style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 2, fontFamily: T.sa }}>Invertido</div>
+            <div style={{ fontFamily: T.mo, fontWeight: 700, fontSize: 14, marginTop: 2 }}>{fmt(invested)}</div>
           </div>
           <div>
-            <div className="text-xs opacity-60">ROI</div>
-            <div className="font-semibold text-amber-300">{fmtPct(roiPct)}</div>
+            <div style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 2, fontFamily: T.sa }}>ROI</div>
+            <div style={{ fontFamily: T.se, fontWeight: 400, fontSize: 14, marginTop: 2, color: '#D4B96A' }}>{fmtPct(roiPct)}</div>
           </div>
           <div>
-            <div className="text-xs opacity-60">Neto</div>
-            <div className={`font-semibold ${remaining > 0 ? 'text-amber-300' : 'text-emerald-300'}`}>
+            <div style={{ fontSize: 9, opacity: 0.5, textTransform: 'uppercase', letterSpacing: 2, fontFamily: T.sa }}>Neto</div>
+            <div style={{ fontFamily: T.mo, fontWeight: 700, fontSize: 14, marginTop: 2, color: remaining > 0 ? '#D4B96A' : '#81C784' }}>
               {remaining > 0 ? `-${fmt(remaining)}` : `+${fmt(Math.abs(remaining))}`}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Payback Progress */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Payback" subtitle={`${fmt(totalDividends)} de ${fmt(invested)}`} />
-        <div className="relative h-6 bg-brand-cream rounded-full overflow-hidden">
-          <div
-            className="h-full gold-gradient rounded-full transition-all duration-1000 flex items-center justify-end pr-2"
-            style={{ width: `${paybackPct}%` }}
-          >
-            <span className="text-[10px] text-white font-bold">{fmtPct(paybackPct)}</span>
-          </div>
+      {/* Payback */}
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>PAYBACK</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, marginTop: 8 }}>
+          <span style={{ fontSize: 11, color: T.mu, fontFamily: T.sa }}>{fmt(totalDividends)} de {fmt(invested)}</span>
+          <span style={{ fontSize: 11, fontFamily: T.mo, fontWeight: 700, color: T.gold }}>{fmtPct(paybackPct)}</span>
+        </div>
+        <div style={{ background: T.bg2, borderRadius: 20, height: 5 }}>
+          <div style={{ width: `${paybackPct}%`, height: '100%', background: T.gold, borderRadius: 20, transition: 'width 1s ease' }} />
         </div>
         {monthsToPayback != null && remaining > 0 && (
-          <p className="text-xs text-brand-cream-dark mt-2">
-            ~{monthsToPayback} meses restantes al ritmo actual ({fmt(avgMonthly)}/mes)
-          </p>
+          <div style={{ ...S.sub, marginTop: 8 }}>~{monthsToPayback} meses restantes al ritmo actual ({fmt(avgMonthly)}/mes)</div>
         )}
       </div>
 
       {/* YTD KPIs */}
-      <div className="grid grid-cols-2 gap-3">
-        <StatCard label={`Dividendos ${currentYear}`} value={fmt(ytdDivs)} sub={`${fmtPct(ytdGrowth)} vs ${currentYear - 1}`} icon={DollarSign} trend={ytdGrowth} color="gold" />
-        <StatCard label="Promedio/Mes" value={fmt(avgMonthly)} sub={`${completedMonths} meses`} icon={BarChart3} color="blue" />
+      <div style={{ ...S.card, marginTop: 12, display: 'flex', justifyContent: 'center' }}>
+        <KPI
+          label={`DIVIDENDOS ${currentYear}`}
+          value={fmt(ytdDivs)}
+          comparison={`${cmpText(ytdDivs, ytdGrowth)} vs ${currentYear - 1}`}
+        />
+        <div style={{ width: 1, background: T.dv, alignSelf: 'stretch', margin: '8px 0' }} />
+        <KPI label="PROMEDIO/MES" value={fmt(avgMonthly)} comparison={`${completedMonths} meses`} />
       </div>
 
       {/* Monthly Dividends Chart */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title={`Dividendos Mensuales ${currentYear}`} subtitle="Mi parte (WISI)" />
-        <div className="h-48">
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>DIVIDENDOS MENSUALES {currentYear} — WISI</div>
+        <div style={{ height: 180, marginTop: 16 }}>
           <Bar
             data={{
               labels: MONTHS_ES,
               datasets: [{
                 data: monthlyDivs,
-                backgroundColor: monthlyDivs.map((_, i) => i < completedMonths ? '#B8963E' : 'rgba(184,150,62,0.2)'),
-                borderRadius: 6,
-                barThickness: 18,
+                backgroundColor: monthlyDivs.map((_, i) => i < completedMonths ? T.gold : 'rgba(184,150,62,0.15)'),
+                borderRadius: 4,
+                barThickness: 16,
               }]
             }}
             options={{
-              ...chartDefaults,
+              ...baseChartOpts,
               scales: {
-                ...chartDefaults.scales,
-                y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => '$' + v } }
-              }
+                ...baseChartOpts.scales,
+                y: { ...baseChartOpts.scales.y, ticks: { ...baseChartOpts.scales.y.ticks, callback: v => `$${v.toLocaleString()}` } },
+              },
+              plugins: { ...baseChartOpts.plugins, tooltip: { enabled: true, callbacks: { label: c => `$${c.raw?.toLocaleString()}` } } },
             }}
           />
         </div>
       </div>
 
       {/* Year over Year */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Comparacion Anual" subtitle="Dividendos WISI por ano" />
-        <div className="h-48">
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>COMPARACION ANUAL — WISI</div>
+        <div style={{ height: 180, marginTop: 16 }}>
           <Bar
             data={{
               labels: ['2024', '2025', '2026'],
               datasets: [{
                 data: yearlyTotals,
-                backgroundColor: ['#C4B8A8', '#3D2B1F', '#B8963E'],
-                borderRadius: 8,
-                barThickness: 40,
+                backgroundColor: [T.dv, T.gold, T.gd],
+                borderRadius: 6,
+                barThickness: 36,
               }]
             }}
             options={{
-              ...chartDefaults,
-              scales: {
-                ...chartDefaults.scales,
-                y: { ...chartDefaults.scales.y, ticks: { ...chartDefaults.scales.y.ticks, callback: v => '$' + (v/1000).toFixed(0) + 'k' } }
-              }
+              ...baseChartOpts,
+              plugins: { ...baseChartOpts.plugins, tooltip: { enabled: true, callbacks: { label: c => `$${c.raw?.toLocaleString()}` } } },
             }}
           />
         </div>
-        <div className="flex justify-between mt-3 text-xs">
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
           {['2024', '2025', '2026'].map((y, i) => (
-            <div key={y} className="text-center">
-              <div className="font-bold">{fmt(yearlyTotals[i])}</div>
-              <div className="text-brand-cream-dark">{y}{i === 2 ? ' (YTD)' : ''}</div>
+            <div key={y} style={{ textAlign: 'center' }}>
+              <div style={S.mono}>{fmt(yearlyTotals[i])}</div>
+              <div style={{ fontSize: 10, color: T.mu, marginTop: 2, fontFamily: T.sa }}>{y}{i === 2 ? ' (YTD)' : ''}</div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Recent Payments */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Ultimos Pagos" subtitle="Dividendos recientes" />
-        <div className="space-y-2">
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>ULTIMOS PAGOS</div>
+        <div style={{ marginTop: 12 }}>
           {[...(dividends[currentYear] || [])].reverse().slice(0, 8).map((d, i) => (
-            <div key={i} className="flex items-center justify-between py-2 border-b border-brand-cream/30 last:border-0">
-              <div className="text-xs text-brand-cream-dark">{d.fecha}</div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-brand-cream-dark">{fmt(d.montoTotal)} total</span>
-                <ChevronRight className="w-3 h-3 text-brand-cream-dark" />
-                <span className="text-sm font-semibold text-brand-brown">{fmt(d.wisiAmount, 2)}</span>
+            <div key={i} style={S.row}>
+              <span style={{ ...S.rowLabel, color: T.mu }}>{d.fecha}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 11, color: T.mu, fontFamily: T.sa }}>{fmt(d.montoTotal)} total</span>
+                <span style={{ fontSize: 10, color: T.mu }}>→</span>
+                <span style={S.mono}>{fmt(d.wisiAmount, 2)}</span>
               </div>
             </div>
           ))}
@@ -591,18 +663,16 @@ function TabParticipacion({ data }) {
   );
 }
 
-// ─── Tab 3: Proyecciones ─────────────────────────────────────
+// ─── Tab 3: Proyecciones ────────────────────────────────────
 function TabProyecciones({ data }) {
-  const { dividends, roi, totales, bookings, courts } = data;
+  const { dividends, roi, totales, bookings, courts, historicalSales } = data;
   const now = new Date();
   const currentYear = now.getFullYear();
   const completedMonths = now.getMonth() + 1;
 
   const invested = roi?.montoInvertido || WISI_INVESTMENT;
   const totalDivs = roi?.dividendosRecibidos || [
-    ...(dividends[2024] || []),
-    ...(dividends[2025] || []),
-    ...(dividends[2026] || []),
+    ...(dividends[2024] || []), ...(dividends[2025] || []), ...(dividends[2026] || []),
   ].reduce((s, d) => s + d.wisiAmount, 0);
 
   const ytdDivs = (dividends[currentYear] || []).reduce((s, d) => s + d.wisiAmount, 0);
@@ -610,12 +680,12 @@ function TabProyecciones({ data }) {
 
   // 3 Scenarios
   const scenarios = [
-    { name: 'Conservador', monthly: 1100, color: '#C4B8A8', desc: 'Ritmo minimo sostenible' },
-    { name: 'Base', monthly: Math.round(currentMonthly || 1530), color: '#B8963E', desc: 'Ritmo actual proyectado' },
-    { name: 'Optimista', monthly: 2200, color: '#3D2B1F', desc: 'Con mejoras operativas' },
+    { name: 'Conservador', monthly: 1100, color: T.dv, desc: 'Ritmo minimo sostenible' },
+    { name: 'Base', monthly: Math.round(currentMonthly || 1530), color: T.gold, desc: 'Ritmo actual proyectado' },
+    { name: 'Optimista', monthly: 2200, color: T.gd, desc: 'Con mejoras operativas' },
   ];
 
-  // Payback curves (months from now until recovery)
+  // Payback curves
   const maxMonths = 60;
   const paybackCurves = scenarios.map(s => {
     const curve = [];
@@ -627,15 +697,7 @@ function TabProyecciones({ data }) {
     return curve;
   });
 
-  // Month labels for chart
-  const monthLabels = [];
-  for (let m = 0; m <= maxMonths; m += 6) {
-    const d = new Date(now);
-    d.setMonth(d.getMonth() + m);
-    monthLabels.push(m === 0 ? 'Hoy' : `${MONTHS_ES[d.getMonth()]} ${d.getFullYear().toString().slice(2)}`);
-  }
-
-  // ROI at 1, 2, 3 years
+  // ROI projections
   const roiProjections = scenarios.map(s => ({
     ...s,
     roi1y: ((totalDivs + s.monthly * 12) / invested * 100),
@@ -645,7 +707,7 @@ function TabProyecciones({ data }) {
   }));
 
   // Underutilized courts
-  const yearBookings = bookings.filter(b => b.date && b.date.startsWith(String(currentYear)));
+  const yearBookings = bookings.filter(b => b.date && b.date.startsWith(String(currentYear)) && b.activity_type !== 'blocked');
   const courtHoursMap = {};
   (courts || []).forEach(c => { courtHoursMap[c.id] = { name: c.name, type: c.type, hours: 0 }; });
   yearBookings.forEach(b => {
@@ -656,51 +718,47 @@ function TabProyecciones({ data }) {
   const courtList = Object.values(courtHoursMap).sort((a, b) => a.hours - b.hours);
   const underutilized = courtList.filter(c => c.hours < 60);
 
-  // Birthday opportunity
-  const currentBdays = yearBookings.filter(b => b.activity_type === 'cumpleanos').length;
+  // Birthdays
+  const currentBdays = yearBookings.filter(b => b.activity_type === 'cumpleanos').length
+    + (historicalSales || []).filter(s => s.sale_date && s.sale_date.startsWith(String(currentYear)) && s.activity_type === 'cumpleanos').length;
   const bdayMonthlyAvg = completedMonths > 0 ? currentBdays / completedMonths : 0;
 
   return (
-    <div className="space-y-6 fade-in">
-      {/* Scenarios Summary */}
-      <div className="space-y-3">
-        {roiProjections.map((s, i) => (
-          <div key={i} className="stat-card rounded-2xl p-4" style={{ borderLeft: `4px solid ${s.color}` }}>
-            <div className="flex items-center justify-between mb-2">
-              <div>
-                <div className="text-sm font-bold">{s.name}</div>
-                <div className="text-xs text-brand-cream-dark">{s.desc}</div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-bold" style={{ color: s.color }}>{fmt(s.monthly)}<span className="text-xs font-normal text-brand-cream-dark">/mes</span></div>
-              </div>
+    <div className="fade-in">
+      {/* Scenarios */}
+      {roiProjections.map((s, i) => (
+        <div key={i} style={{ ...S.card, borderLeft: `4px solid ${s.color}`, marginBottom: 12 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.ch, fontFamily: T.sa }}>{s.name}</div>
+              <div style={{ fontSize: 11, color: T.mu, fontFamily: T.sa, marginTop: 2 }}>{s.desc}</div>
             </div>
-            <div className="grid grid-cols-4 gap-2 mt-3">
-              <div className="text-center">
-                <div className="text-xs text-brand-cream-dark">Payback</div>
-                <div className="text-sm font-bold">{s.paybackMonths > 0 ? `${s.paybackMonths}m` : 'Listo'}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-brand-cream-dark">ROI 1a</div>
-                <div className="text-sm font-bold">{fmtPct(s.roi1y)}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-brand-cream-dark">ROI 2a</div>
-                <div className="text-sm font-bold">{fmtPct(s.roi2y)}</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xs text-brand-cream-dark">ROI 3a</div>
-                <div className="text-sm font-bold">{fmtPct(s.roi3y)}</div>
-              </div>
+            <div style={{ textAlign: 'right' }}>
+              <span style={{ fontSize: 20, fontWeight: 400, fontFamily: T.se, color: s.color, letterSpacing: -1 }}>{fmt(s.monthly)}</span>
+              <span style={{ fontSize: 10, color: T.mu, fontFamily: T.sa }}>/mes</span>
             </div>
           </div>
-        ))}
-      </div>
+          <div style={{ display: 'flex', marginTop: 16, borderTop: `1px solid ${T.bg2}`, paddingTop: 12 }}>
+            {[
+              { label: 'PAYBACK', value: s.paybackMonths > 0 ? `${s.paybackMonths}m` : 'Listo' },
+              { label: 'ROI 1A', value: fmtPct(s.roi1y) },
+              { label: 'ROI 2A', value: fmtPct(s.roi2y) },
+              { label: 'ROI 3A', value: fmtPct(s.roi3y) },
+            ].map((item, j) => (
+              <div key={j} style={{ flex: 1, textAlign: 'center' }}>
+                <div style={{ fontSize: 8, textTransform: 'uppercase', letterSpacing: 2, color: T.mu, fontFamily: T.sa }}>{item.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.ch, fontFamily: T.se, marginTop: 4 }}>{item.value}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
 
       {/* Payback Curve */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Curva de Payback" subtitle={`Proyeccion hasta recuperar ${fmt(invested)}`} />
-        <div className="h-56">
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>CURVA DE PAYBACK — hasta recuperar {fmt(invested)}</div>
+        <div style={{ height: 220, marginTop: 16 }}>
           <Line
             data={{
               labels: Array.from({ length: maxMonths + 1 }, (_, i) => {
@@ -712,13 +770,12 @@ function TabProyecciones({ data }) {
                 return '';
               }),
               datasets: [
-                // Investment line
                 {
                   label: 'Inversion',
                   data: Array(maxMonths + 1).fill(invested),
-                  borderColor: '#dc2626',
-                  borderDash: [6, 4],
-                  borderWidth: 2,
+                  borderColor: '#B71C1C55',
+                  borderDash: [4, 4],
+                  borderWidth: 1.5,
                   pointRadius: 0,
                   fill: false,
                 },
@@ -734,76 +791,74 @@ function TabProyecciones({ data }) {
               ]
             }}
             options={{
-              ...chartDefaults,
+              ...baseChartOpts,
               plugins: {
-                ...chartDefaults.plugins,
-                legend: {
-                  display: true,
-                  position: 'bottom',
-                  labels: { font: { family: 'Georgia', size: 10 }, boxWidth: 12, padding: 8 }
-                },
+                ...baseChartOpts.plugins,
+                legend: { display: false },
+                tooltip: { enabled: true, callbacks: { label: c => `${c.dataset.label}: $${c.raw?.toLocaleString()}` } },
               },
               scales: {
-                ...chartDefaults.scales,
+                ...baseChartOpts.scales,
                 y: {
-                  ...chartDefaults.scales.y,
-                  ticks: { ...chartDefaults.scales.y.ticks, callback: v => '$' + (v/1000).toFixed(0) + 'k' }
-                }
-              }
+                  ...baseChartOpts.scales.y,
+                  min: 30000,
+                  max: 100000,
+                },
+              },
             }}
           />
         </div>
+        <ChartLegend items={[
+          { label: 'Inversion', color: T.rd, dashed: true },
+          { label: 'Conservador', color: T.dv },
+          { label: 'Base', color: T.gold },
+          { label: 'Optimista', color: T.gd },
+        ]} />
       </div>
 
       {/* Levers */}
-      <div className="stat-card rounded-2xl p-4">
-        <SectionHeader title="Palancas de Crecimiento" subtitle="Oportunidades concretas" />
-        <div className="space-y-3">
-          {/* Birthday upside */}
-          <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-amber-50 to-orange-50 rounded-xl border border-amber-200">
-            <Trophy className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+      <div style={S.divider} />
+      <div style={S.card}>
+        <div style={S.label}>PALANCAS DE CRECIMIENTO</div>
+        <div style={{ marginTop: 16 }}>
+          {/* Birthday */}
+          <div style={S.row}>
             <div>
-              <div className="text-sm font-semibold">Mas Cumpleanos</div>
-              <div className="text-xs text-brand-cream-dark mt-0.5">
-                Promedio actual: {bdayMonthlyAvg.toFixed(1)}/mes. En 2025 fueron ~10/mes.
-                Cada cumpleano adicional = ~REF 300-500 extra.
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ch, fontFamily: T.sa }}>Mas Cumpleanos</div>
+              <div style={{ fontSize: 11, color: T.mu, fontFamily: T.sa, marginTop: 2 }}>
+                Actual: {bdayMonthlyAvg.toFixed(1)}/mes. 2025: ~10/mes. Cada uno = ~REF 300-500.
               </div>
             </div>
           </div>
 
           {/* Underutilized courts */}
           {underutilized.length > 0 && (
-            <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-              <Zap className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+            <div style={S.row}>
               <div>
-                <div className="text-sm font-semibold">Activar Canchas Subutilizadas</div>
-                <div className="text-xs text-brand-cream-dark mt-0.5">
-                  {underutilized.map(c => c.name).join(', ')} con menos de 60h YTD.
-                  Potencial: +REF 500-1,000/mes con promociones y academias.
+                <div style={{ fontSize: 12, fontWeight: 700, color: T.ch, fontFamily: T.sa }}>Activar Canchas Subutilizadas</div>
+                <div style={{ fontSize: 11, color: T.mu, fontFamily: T.sa, marginTop: 2 }}>
+                  {underutilized.map(c => c.name).join(', ')} con &lt;60h YTD. Potencial: +REF 500-1,000/mes.
                 </div>
               </div>
             </div>
           )}
 
           {/* Collection */}
-          <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-emerald-50 to-green-50 rounded-xl border border-emerald-200">
-            <Target className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+          <div style={S.row}>
             <div>
-              <div className="text-sm font-semibold">Cobrar Pendientes</div>
-              <div className="text-xs text-brand-cream-dark mt-0.5">
-                Revisar reservas sin pago completo. Reducir morosidad mejora el flujo directo de dividendos.
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ch, fontFamily: T.sa }}>Cobrar Pendientes</div>
+              <div style={{ fontSize: 11, color: T.mu, fontFamily: T.sa, marginTop: 2 }}>
+                Reducir morosidad mejora el flujo directo de dividendos.
               </div>
             </div>
           </div>
 
           {/* Cantina */}
-          <div className="flex items-start gap-3 p-3 bg-gradient-to-r from-purple-50 to-fuchsia-50 rounded-xl border border-purple-200">
-            <ArrowUpRight className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+          <div style={{ ...S.row, borderBottom: 'none' }}>
             <div>
-              <div className="text-sm font-semibold">Cantina + Eventos</div>
-              <div className="text-xs text-brand-cream-dark mt-0.5">
-                Ingresos de cantina y eventos especiales suman al fondo distribuible.
-                Potencial con nuevos productos y torneos regulares.
+              <div style={{ fontSize: 12, fontWeight: 700, color: T.ch, fontFamily: T.sa }}>Cantina + Eventos</div>
+              <div style={{ fontSize: 11, color: T.mu, fontFamily: T.sa, marginTop: 2 }}>
+                Ingresos de cantina y torneos suman al fondo distribuible.
               </div>
             </div>
           </div>
@@ -813,7 +868,7 @@ function TabProyecciones({ data }) {
   );
 }
 
-// ─── Main App ────────────────────────────────────────────────
+// ─── Main App ───────────────────────────────────────────────
 export default function Home() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -822,7 +877,6 @@ export default function Home() {
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Check existing session
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
@@ -834,17 +888,13 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Fetch dashboard data
   const fetchData = useCallback(async (token) => {
     setDataLoading(true);
     setError('');
     try {
-      const res = await fetch('/api/dashboard', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
+      const res = await fetch('/api/dashboard', { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) throw new Error('Error cargando datos');
-      const json = await res.json();
-      setData(json);
+      setData(await res.json());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -853,9 +903,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (session?.access_token) {
-      fetchData(session.access_token);
-    }
+    if (session?.access_token) fetchData(session.access_token);
   }, [session, fetchData]);
 
   async function handleLogout() {
@@ -866,74 +914,69 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-brand-cream-light">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-gold" />
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: T.bg }}>
+        <Loader2 size={20} className="animate-spin" style={{ color: T.gold }} />
       </div>
     );
   }
 
-  if (!session) {
-    return <LoginScreen onLogin={(s) => setSession(s)} />;
-  }
+  if (!session) return <LoginScreen onLogin={(s) => setSession(s)} />;
 
-  const tabs = [
-    { label: 'El Complejo', icon: Building2 },
-    { label: 'Mi Parte', icon: User },
-    { label: 'Proyecciones', icon: TrendingUp },
-  ];
+  const tabs = ['EL COMPLEJO', 'MI PARTE', 'PROYECCIONES'];
 
   return (
-    <div className="min-h-screen bg-brand-cream-light">
+    <div style={{ minHeight: '100vh', background: T.bg }}>
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-brand-cream-light/80 backdrop-blur-lg border-b border-brand-cream/50">
-        <div className="max-w-lg mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 gold-gradient rounded-lg flex items-center justify-center">
-              <Building2 className="w-4 h-4 text-white" />
+      <header style={{ position: 'sticky', top: 0, zIndex: 50, background: T.bg, borderBottom: `1px solid ${T.dv}` }}>
+        <div style={{ maxWidth: 480, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, background: T.gold, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ color: '#FFF', fontSize: 14, fontWeight: 700, fontFamily: T.se }}>F</span>
             </div>
             <div>
-              <h1 className="text-sm font-bold text-brand-brown leading-tight">Futuros Socios</h1>
-              <p className="text-[10px] text-brand-cream-dark">WISI — {WISI_PCT}%</p>
+              <div style={{ fontSize: 13, fontWeight: 700, color: T.ch, fontFamily: T.sa, lineHeight: 1.2 }}>Futuros Socios</div>
+              <div style={{ fontSize: 9, color: T.mu, letterSpacing: 2, textTransform: 'uppercase', fontFamily: T.sa }}>WISI — {WISI_PCT}%</div>
             </div>
           </div>
-          <button onClick={handleLogout} className="p-2 rounded-lg hover:bg-brand-cream/50 transition">
-            <LogOut className="w-4 h-4 text-brand-cream-dark" />
+          <button onClick={handleLogout} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 8 }}>
+            <LogOut size={16} color={T.mu} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="max-w-lg mx-auto px-4 flex">
+        <div style={{ maxWidth: 480, margin: '0 auto', display: 'flex', padding: '0 16px' }}>
           {tabs.map((tab, i) => (
             <button
               key={i}
               onClick={() => setActiveTab(i)}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium transition ${
-                activeTab === i ? 'tab-active' : 'tab-inactive hover:text-brand-brown/60'
-              }`}
+              style={{
+                background: 'none', border: 'none',
+                color: activeTab === i ? T.gold : T.mu,
+                padding: '10px 14px', fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                borderBottom: activeTab === i ? `2px solid ${T.gold}` : '2px solid transparent',
+                letterSpacing: 1.5, textTransform: 'uppercase', fontFamily: T.sa,
+                whiteSpace: 'nowrap', flex: 1, textAlign: 'center',
+              }}
             >
-              <tab.icon className="w-3.5 h-3.5" />
-              {tab.label}
+              {tab}
             </button>
           ))}
         </div>
       </header>
 
       {/* Content */}
-      <main className="max-w-lg mx-auto px-4 py-5 pb-20">
+      <main style={{ maxWidth: 480, margin: '0 auto', padding: '20px 16px 80px' }}>
         {dataLoading && !data && (
-          <div className="flex flex-col items-center justify-center py-20">
-            <Loader2 className="w-6 h-6 animate-spin text-brand-gold mb-3" />
-            <p className="text-sm text-brand-cream-dark">Cargando datos...</p>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 0' }}>
+            <Loader2 size={20} className="animate-spin" style={{ color: T.gold, marginBottom: 12 }} />
+            <span style={{ fontSize: 12, color: T.mu, fontFamily: T.sa }}>Cargando datos...</span>
           </div>
         )}
 
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-center">
-            <p className="text-sm text-red-700">{error}</p>
-            <button
-              onClick={() => fetchData(session.access_token)}
-              className="mt-2 text-xs text-red-600 underline"
-            >
+          <div style={{ ...S.card, borderColor: T.rd, textAlign: 'center' }}>
+            <p style={{ fontSize: 12, color: T.rd, margin: 0, fontFamily: T.sa }}>{error}</p>
+            <button onClick={() => fetchData(session.access_token)} style={{ fontSize: 11, color: T.rd, background: 'none', border: 'none', textDecoration: 'underline', cursor: 'pointer', marginTop: 8, fontFamily: T.sa }}>
               Reintentar
             </button>
           </div>
