@@ -30,10 +30,13 @@ function parseDividendSheet(rows, year) {
   if (!rows || rows.length < 2) return [];
   const headers = rows[0];
 
-  // Find WISI $ column
   const wisiIdx = headers.findIndex(h => h && h.trim() === 'WISI $');
   const fechaIdx = 0;
   const montoIdx = 1;
+  // 2026 has extra columns: BOLIVARES (idx 2), DIVISA (idx 18)
+  const bsIdx = headers.findIndex(h => h && h.trim() === 'BOLIVARES');
+  const divisaIdx = headers.findIndex(h => h && h.trim() === 'DIVISA');
+  const comentIdx = headers.findIndex(h => h && h.trim() === 'COMENTARIOS');
 
   return rows.slice(1)
     .filter(r => r[fechaIdx] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[fechaIdx].trim()))
@@ -41,6 +44,9 @@ function parseDividendSheet(rows, year) {
       fecha: r[fechaIdx],
       montoTotal: parseNum(r[montoIdx]),
       wisiAmount: wisiIdx >= 0 ? parseNum(r[wisiIdx]) : 0,
+      bolivares: bsIdx >= 0 ? parseNum(r[bsIdx]) : 0,
+      divisa: divisaIdx >= 0 ? (r[divisaIdx] || '').trim() : '',
+      comentario: comentIdx >= 0 ? (r[comentIdx] || '').trim() : '',
       year,
     }));
 }
@@ -70,6 +76,8 @@ export async function GET(request) {
       bookings,
       courts,
       historicalSales,
+      payments,
+      exchangeRateRes,
       div2024Res,
       div2025Res,
       div2026Res,
@@ -79,6 +87,8 @@ export async function GET(request) {
       fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration'),
       supabase.from('courts').select('*').order('id'),
       fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,duration_hours'),
+      fetchAllRows('payments', 'id,booking_id,amount_eur,currency,method,created_at'),
+      supabase.from('exchange_rates').select('eur_rate,usd_rate,created_at').order('created_at', { ascending: false }).limit(1),
       getSheetData(SHEET_ID, 'Dividendos 2024!A1:P50').catch(() => ({ values: [] })),
       getSheetData(SHEET_ID, 'Dividendos 2025!A1:P50').catch(() => ({ values: [] })),
       getSheetData(SHEET_ID, 'Dividendos 2026!A1:W50').catch(() => ({ values: [] })),
@@ -95,7 +105,6 @@ export async function GET(request) {
     let roiData = null;
     const roiRows = roiRes.values || [];
     if (roiRows.length > 2) {
-      const roiHeaders = roiRows[2]; // Headers are on row 3
       const wisiRow = roiRows.find(r => r[0] && r[0].toUpperCase().includes('WISI'));
       if (wisiRow) {
         roiData = {
@@ -126,10 +135,16 @@ export async function GET(request) {
       }
     }
 
+    // Exchange rate
+    const rateRow = exchangeRateRes.data?.[0];
+    const exchangeRate = rateRow ? { eurRate: rateRow.eur_rate, usdRate: rateRow.usd_rate, updatedAt: rateRow.created_at } : null;
+
     return NextResponse.json({
       bookings,
       courts: courts.data || [],
       historicalSales,
+      payments,
+      exchangeRate,
       dividends: {
         2024: dividends2024,
         2025: dividends2025,
