@@ -6,16 +6,13 @@ import { getSheetData } from '../../lib/google-sheets';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
-// Fetch all rows (Supabase has 1000 row limit per query)
 async function fetchAllRows(table, select = '*', filters = {}) {
   const PAGE = 1000;
   let all = [];
   let from = 0;
   while (true) {
     let q = supabase.from(table).select(select).range(from, from + PAGE - 1);
-    for (const [key, val] of Object.entries(filters)) {
-      q = q.eq(key, val);
-    }
+    for (const [key, val] of Object.entries(filters)) q = q.eq(key, val);
     const { data, error } = await q;
     if (error) throw error;
     if (!data || data.length === 0) break;
@@ -26,31 +23,6 @@ async function fetchAllRows(table, select = '*', filters = {}) {
   return all;
 }
 
-function parseDividendSheet(rows, year) {
-  if (!rows || rows.length < 2) return [];
-  const headers = rows[0];
-
-  const wisiIdx = headers.findIndex(h => h && h.trim() === 'WISI $');
-  const fechaIdx = 0;
-  const montoIdx = 1;
-  // 2026 has extra columns: BOLIVARES (idx 2), DIVISA (idx 18)
-  const bsIdx = headers.findIndex(h => h && h.trim() === 'BOLIVARES');
-  const divisaIdx = headers.findIndex(h => h && h.trim() === 'DIVISA');
-  const comentIdx = headers.findIndex(h => h && h.trim() === 'COMENTARIOS');
-
-  return rows.slice(1)
-    .filter(r => r[fechaIdx] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[fechaIdx].trim()))
-    .map(r => ({
-      fecha: r[fechaIdx],
-      montoTotal: parseNum(r[montoIdx]),
-      wisiAmount: wisiIdx >= 0 ? parseNum(r[wisiIdx]) : 0,
-      bolivares: bsIdx >= 0 ? parseNum(r[bsIdx]) : 0,
-      divisa: divisaIdx >= 0 ? (r[divisaIdx] || '').trim() : '',
-      comentario: comentIdx >= 0 ? (r[comentIdx] || '').trim() : '',
-      year,
-    }));
-}
-
 function parseNum(val) {
   if (!val) return 0;
   const s = String(val).replace(/[$,]/g, '').trim();
@@ -58,9 +30,92 @@ function parseNum(val) {
   return isNaN(n) ? 0 : n;
 }
 
+// Find all partner $ columns in headers: "RAMZI $", "WISI $", etc.
+function findPartnerColumns(headers) {
+  const partners = {};
+  headers.forEach((h, idx) => {
+    if (h && h.trim().endsWith('$')) {
+      const name = h.trim().replace(/\s*\$$/, '').trim();
+      if (name) partners[name] = idx;
+    }
+  });
+  return partners;
+}
+
+function parseDividendSheet(rows, year) {
+  if (!rows || rows.length < 2) return [];
+  const headers = rows[0];
+  const partnerCols = findPartnerColumns(headers);
+  const fechaIdx = 0;
+  const montoIdx = 1;
+  const bsIdx = headers.findIndex(h => h && h.trim() === 'BOLIVARES');
+  const divisaIdx = headers.findIndex(h => h && h.trim() === 'DIVISA');
+  const comentIdx = headers.findIndex(h => h && h.trim() === 'COMENTARIOS');
+
+  return rows.slice(1)
+    .filter(r => r[fechaIdx] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[fechaIdx].trim()))
+    .map(r => {
+      const partners = {};
+      for (const [name, idx] of Object.entries(partnerCols)) {
+        partners[name] = parseNum(r[idx]);
+      }
+      return {
+        fecha: r[fechaIdx],
+        montoTotal: parseNum(r[montoIdx]),
+        partners,
+        bolivares: bsIdx >= 0 ? parseNum(r[bsIdx]) : 0,
+        divisa: divisaIdx >= 0 ? (r[divisaIdx] || '').trim() : '',
+        comentario: comentIdx >= 0 ? (r[comentIdx] || '').trim() : '',
+        year,
+      };
+    });
+}
+
+function parseRoiSheet(rows) {
+  if (!rows || rows.length < 3) return {};
+  // Find header row (row with "SOCIO")
+  const hdrIdx = rows.findIndex(r => r[0] && r[0].toUpperCase().includes('SOCIO'));
+  if (hdrIdx < 0) return {};
+  const result = {};
+  for (let i = hdrIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] || !r[0].trim()) continue;
+    const name = r[0].trim().toUpperCase();
+    result[name] = {
+      participacion: parseNum(r[1]),
+      montoInvertido: parseNum(r[2]),
+      dividendosRecibidos: parseNum(r[3]),
+      neto: parseNum(r[4]),
+      roiPct: parseNum(r[5]),
+      mesesTotalPayback: parseNum(r[6]),
+      mesesRestantes: parseNum(r[7]),
+    };
+  }
+  return result;
+}
+
+function parseTotalesSheet(rows) {
+  if (!rows || rows.length < 3) return {};
+  const hdrIdx = rows.findIndex(r => r[0] && r[0].toUpperCase().includes('SOCIO'));
+  if (hdrIdx < 0) return {};
+  const result = {};
+  for (let i = hdrIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[0] || !r[0].trim()) continue;
+    const name = r[0].trim().toUpperCase();
+    result[name] = {
+      pctActual: parseNum(r[1]),
+      total2024: parseNum(r[2]),
+      total2025: parseNum(r[3]),
+      total2026: parseNum(r[4]),
+      granTotal: parseNum(r[5]),
+    };
+  }
+  return result;
+}
+
 export async function GET(request) {
   try {
-    // Verify auth
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -71,18 +126,9 @@ export async function GET(request) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    // Fetch all data in parallel
     const [
-      bookings,
-      courts,
-      historicalSales,
-      payments,
-      exchangeRateRes,
-      div2024Res,
-      div2025Res,
-      div2026Res,
-      roiRes,
-      totalesRes,
+      bookings, courts, historicalSales, payments, exchangeRateRes,
+      div2024Res, div2025Res, div2026Res, roiRes, totalesRes,
     ] = await Promise.all([
       fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration'),
       supabase.from('courts').select('*').order('id'),
@@ -96,62 +142,23 @@ export async function GET(request) {
       getSheetData(SHEET_ID, 'Totales Historicos!A1:G20').catch(() => ({ values: [] })),
     ]);
 
-    // Parse dividends
-    const dividends2024 = parseDividendSheet(div2024Res.values || [], 2024);
-    const dividends2025 = parseDividendSheet(div2025Res.values || [], 2025);
-    const dividends2026 = parseDividendSheet(div2026Res.values || [], 2026);
-
-    // Parse ROI sheet
-    let roiData = null;
-    const roiRows = roiRes.values || [];
-    if (roiRows.length > 2) {
-      const wisiRow = roiRows.find(r => r[0] && r[0].toUpperCase().includes('WISI'));
-      if (wisiRow) {
-        roiData = {
-          participacion: parseNum(wisiRow[1]),
-          montoInvertido: parseNum(wisiRow[2]),
-          dividendosRecibidos: parseNum(wisiRow[3]),
-          neto: parseNum(wisiRow[4]),
-          roiPct: parseNum(wisiRow[5]),
-          mesesTotalPayback: parseNum(wisiRow[6]),
-          mesesRestantes: parseNum(wisiRow[7]),
-        };
-      }
-    }
-
-    // Parse Totales Historicos
-    let totalesData = null;
-    const totalesRows = totalesRes.values || [];
-    if (totalesRows.length > 2) {
-      const wisiRow = totalesRows.find(r => r[0] && r[0].toUpperCase().includes('WISI'));
-      if (wisiRow) {
-        totalesData = {
-          pctActual: parseNum(wisiRow[1]),
-          total2024: parseNum(wisiRow[2]),
-          total2025: parseNum(wisiRow[3]),
-          total2026: parseNum(wisiRow[4]),
-          granTotal: parseNum(wisiRow[5]),
-        };
-      }
-    }
-
-    // Exchange rate
     const rateRow = exchangeRateRes.data?.[0];
-    const exchangeRate = rateRow ? { eurRate: rateRow.eur_rate, usdRate: rateRow.usd_rate, updatedAt: rateRow.created_at } : null;
+    const exchangeRate = rateRow ? { eurRate: rateRow.eur_rate, usdRate: rateRow.usd_rate } : null;
 
     return NextResponse.json({
+      userEmail: user.email,
       bookings,
       courts: courts.data || [],
       historicalSales,
       payments,
       exchangeRate,
       dividends: {
-        2024: dividends2024,
-        2025: dividends2025,
-        2026: dividends2026,
+        2024: parseDividendSheet(div2024Res.values || [], 2024),
+        2025: parseDividendSheet(div2025Res.values || [], 2025),
+        2026: parseDividendSheet(div2026Res.values || [], 2026),
       },
-      roi: roiData,
-      totales: totalesData,
+      roi: parseRoiSheet(roiRes.values || []),
+      totales: parseTotalesSheet(totalesRes.values || []),
     });
   } catch (err) {
     console.error('[DASHBOARD] Error:', err);
