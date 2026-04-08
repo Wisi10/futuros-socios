@@ -1,6 +1,6 @@
 export const metadata = {
   title: 'Futuros Socios — Dashboard',
-  description: 'Dashboard de inversión para socios de Futuros Sports Complex',
+  description: 'Dashboard de inversion para socios de Futuros Sports Complex',
 };
 
 export const viewport = {

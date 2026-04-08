@@ -264,7 +264,7 @@ function TabComplejo({data}){
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>OCUPACION POR CANCHA — {cy}</div>
-      <div style={{marginTop:16}}>{ch.map((c,i)=>{const mx=ch[0]?.hours||1;const occ=availPerCourt>0?(c.hours/availPerCourt*100):0;return <div key={i} style={{marginBottom:12}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{c.name} <span style={{color:T.mu}}>({c.type})</span></span><div><span style={S.moB}>{c.hours}h</span><span style={{...S.mono,fontSize:10,marginLeft:6}}>({fmtPct(occ)})</span></div></div><div style={{background:'rgba(212,201,184,0.35)',borderRadius:6,height:6,overflow:'hidden'}}><div style={{width:`${(c.hours/mx)*100}%`,height:'100%',borderRadius:6,background:c.type==='F7'?T.gold:T.dv}}/></div></div>})}</div>
+      <div style={{marginTop:16}}>{ch.map((c,i)=>{const mx=ch[0]?.hours||1;const occ=availPerCourt>0?(c.hours/availPerCourt*100):0;return <div key={i} style={{marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{c.name} <span style={{color:T.mu}}>({c.type})</span></span><div><span style={S.moB}>{c.hours}h</span><span style={{...S.mono,fontSize:10,marginLeft:6}}>({fmtPct(occ)})</span></div></div><div style={{background:'rgba(212,201,184,0.35)',borderRadius:6,height:8,overflow:'hidden'}}><div style={{width:`${(c.hours/mx)*100}%`,height:'100%',borderRadius:6,background:c.type==='F7'?T.gold:T.dv,transition:`width 0.8s ${ease}`}}/></div></div>})}</div>
     </div>
 
     <div style={S.div}/>
@@ -364,11 +364,12 @@ function TabParticipacion({data,partnerKey}){
     {/* Composicion Bs/USD */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>COMPOSICION DE DIVIDENDOS</div>
+      <div style={S.lbl}>COMPOSICION DE MIS DIVIDENDOS</div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:16}}>
         <div style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>BOLIVARES</div><div style={{...S.bigNum,fontSize:20,color:T.ch}}>{fmt(divBs)}</div><div style={{...S.mono,fontSize:10,marginTop:4}}>{divT>0?fmtPct(divBs/divT*100):'0%'}</div></div>
         <div style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>USD CASH</div><div style={{...S.bigNum,fontSize:20,color:T.gd}}>{fmt(divUsd)}</div><div style={{...S.mono,fontSize:10,marginTop:4}}>{divT>0?fmtPct(divUsd/divT*100):'0%'}</div></div>
       </div>
+      <div style={{...S.mono,fontSize:9,marginTop:8,textAlign:'center'}}>Bs/USD solo distinguible en 2026 · 2024-2025 cuenta como Bs</div>
     </div>
 
     {/* Ultimos Pagos */}
@@ -435,17 +436,16 @@ function TabProyecciones({data,partnerKey}){
     </div>
 
     {inv>0&&<>
-    {/* Scenarios */}
+    {/* Scenarios — 3 column grid */}
     <div style={S.div}/>
-    {proj.map((s,i)=><div key={i} className="kpi-card card-hover" style={{...S.card,borderLeft:`4px solid ${s.color}`,marginBottom:12}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-        <div><div style={{fontSize:13,fontWeight:600,color:T.ch,fontFamily:T.sa}}>{s.name}</div><div style={{...S.mono,fontSize:10,marginTop:2}}>{s.desc}</div></div>
-        <div style={{textAlign:'right'}}><span style={{...S.bigNum,fontSize:20,color:s.color}}>{fmt(s.monthly)}</span><span style={{...S.mono,fontSize:10}}>/mes</span></div>
-      </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginTop:14,borderTop:`0.5px solid rgba(212,201,184,0.3)`,paddingTop:12}}>
-        {[{l:'PAYBACK',v:s.pbM>0?`${s.pbM}m`:'Listo'},{l:'ROI 1A',v:fmtPct(s.roi1y)},{l:'ROI 2A',v:fmtPct(s.roi2y)},{l:'ROI 3A',v:fmtPct(s.roi3y)}].map((it,j)=><div key={j} style={{textAlign:'center'}}><div style={{fontSize:8,textTransform:'uppercase',letterSpacing:'1.5px',color:T.mu,fontFamily:T.sa}}>{it.l}</div><div style={{...S.bigNum,fontSize:14,color:T.ch,marginTop:4}}>{it.v}</div></div>)}
-      </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
+    {proj.map((s,i)=><div key={i} className="card-hover" style={{...S.card,padding:'1rem',borderLeft:`3px solid ${s.color}`,...(i===1?{border:`1.5px solid ${T.gold}`,borderLeft:`3px solid ${T.gold}`}:{})}}>
+      <div style={{...S.lbl,fontSize:8,marginBottom:4}}>{s.name}</div>
+      <div style={{...S.bigNum,fontSize:22,color:s.color}}>{fmt(s.monthly)}<span style={{...S.mono,fontSize:10,fontWeight:400}}>/mes</span></div>
+      <div style={{...S.mono,fontSize:9,marginTop:2,marginBottom:12}}>{s.desc}</div>
+      {[{l:'PAYBACK',v:s.pbM>0?`${s.pbM}m`:'Listo'},{l:'ROI 1A',v:fmtPct(s.roi1y)},{l:'ROI 2A',v:fmtPct(s.roi2y)},{l:'ROI 3A',v:fmtPct(s.roi3y)}].map((it,j)=><div key={j} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderTop:j===0?`0.5px solid rgba(212,201,184,0.3)`:'none'}}><span style={{fontSize:9,color:T.mu,fontFamily:T.sa,textTransform:'uppercase',letterSpacing:'1px'}}>{it.l}</span><span style={{...S.moB,fontSize:12}}>{it.v}</span></div>)}
     </div>)}
+    </div>
 
     {/* Ritmos */}
     <div style={S.div}/>
