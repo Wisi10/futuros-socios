@@ -121,29 +121,40 @@ function TabComplejo({data}) {
   const {bookings,courts,historicalSales,payments,exchangeRate}=data;
   const now=new Date(), cy=now.getFullYear(), cm=now.getMonth()+1;
 
-  const yb=useMemo(()=>bookings.filter(b=>b.date?.startsWith(String(cy))&&b.activity_type!=='blocked'),[bookings,cy]);
+  // Fix 1: filter future bookings — only include up to today
+  const today=now.toISOString().slice(0,10);
+  const yb=useMemo(()=>bookings.filter(b=>b.date?.startsWith(String(cy))&&b.date<=today&&b.activity_type!=='blocked'),[bookings,cy,today]);
+  // 2025 bookings = 0 in this table, use historical_sales for 2025 comparisons
   const pyb=useMemo(()=>bookings.filter(b=>b.date?.startsWith(String(cy-1))&&b.activity_type!=='blocked'),[bookings,cy]);
 
-  // Monthly revenue current + prev year
+  // Fix 3: 2025 monthly revenue from historical_sales (total_ref is already in REF/EUR)
   const mr=useMemo(()=>{const m=Array(12).fill(0);yb.forEach(b=>{const mo=gm(b.date);if(mo)m[mo-1]+=(b.price_eur||0)});return m},[yb]);
-  const pmr=useMemo(()=>{const m=Array(12).fill(0);pyb.forEach(b=>{const mo=gm(b.date);if(mo)m[mo-1]+=(b.price_eur||0)});return m},[pyb]);
+  const pmr=useMemo(()=>{
+    const m=Array(12).fill(0);
+    // bookings 2025 (likely empty)
+    pyb.forEach(b=>{const mo=gm(b.date);if(mo)m[mo-1]+=(b.price_eur||0)});
+    // historical_sales 2025 (has the real data)
+    (historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const mo=gm(s.sale_date);if(mo)m[mo-1]+=(s.total_ref||0)});
+    return m;
+  },[pyb,historicalSales,cy]);
 
   const tmr=mr[cm-1]||0, lmr=cm>1?(mr[cm-2]||0):0, smly=pmr[cm-1]||0;
-  const momG=pctOf(tmr,lmr), yoyMG=pctOf(tmr,smly);
+  const momG=pctOf(tmr,lmr), yoyMG=smly>0?pctOf(tmr,smly):null;
 
-  // F7 vs F5
-  const f7r=useMemo(()=>yb.filter(b=>b.type==='F7').reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
-  const f5r=useMemo(()=>yb.filter(b=>b.type==='F5').reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
-  const tr=f7r+f5r;
-  const pytr=pyb.reduce((s,b)=>s+(b.price_eur||0),0);
-  const pyf7=pyb.filter(b=>b.type==='F7').reduce((s,b)=>s+(b.price_eur||0),0);
-  const pyf5=pyb.filter(b=>b.type==='F5').reduce((s,b)=>s+(b.price_eur||0),0);
-  const f7pct25=pytr>0?pyf7/pytr*100:0;
-  const f5pct25=pytr>0?pyf5/pytr*100:0;
+  // Fix 2: F7+F11 as F7 group, F5+F5T as F5 group. Total = all non-blocked.
+  const f7r=useMemo(()=>yb.filter(b=>b.type==='F7'||b.type==='F11').reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
+  const f5r=useMemo(()=>yb.filter(b=>b.type==='F5'||b.type==='F5T').reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
+  const tr=useMemo(()=>yb.reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
+  // 2025 comparison from historical_sales
+  const pyRev=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy]);
+  const pyf7r=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))&&(s.court_type==='F7'||s.court_type==='F11')).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy]);
+  const pyf5r=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))&&(s.court_type==='F5'||s.court_type==='F5T')).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy]);
+  const f7pct25=pyRev>0?pyf7r/pyRev*100:0;
+  const f5pct25=pyRev>0?pyf5r/pyRev*100:0;
 
-  // YTD comparison
-  const pySame=pyb.filter(b=>gm(b.date)<=cm).reduce((s,b)=>s+(b.price_eur||0),0);
-  const yoyG=pctOf(tr,pySame);
+  // YTD comparison using historical_sales for 2025
+  const pySame=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))&&gm(s.sale_date)<=cm).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy,cm]);
+  const yoyG=pySame>0?pctOf(tr,pySame):null;
 
   // Week comparison
   const td=now.toISOString().slice(0,10);
@@ -179,8 +190,9 @@ function TabComplejo({data}) {
     yb.forEach(b=>(b.court_ids||[]).forEach(cid=>{if(map[cid])map[cid].hours+=(b.duration||0)}));
     return Object.values(map).sort((a,b)=>b.hours-a.hours);
   },[yb,courts]);
-  const pmH=useMemo(()=>{const pm=cm>1?cm-1:12;return yb.filter(b=>gm(b.date)===pm).reduce((s,b)=>s+((b.court_ids||[]).length*(b.duration||0)),0)},[yb,cm]);
-  const tmH=useMemo(()=>yb.filter(b=>gm(b.date)===cm).reduce((s,b)=>s+((b.court_ids||[]).length*(b.duration||0)),0),[yb,cm]);
+  // Fix 6: occupancy = sum of duration (booking-hours), not multiplied by court count
+  const pmH=useMemo(()=>{const pm=cm>1?cm-1:12;return yb.filter(b=>gm(b.date)===pm).reduce((s,b)=>s+(b.duration||0),0)},[yb,cm]);
+  const tmH=useMemo(()=>yb.filter(b=>gm(b.date)===cm).reduce((s,b)=>s+(b.duration||0),0),[yb,cm]);
   const occG=pctOf(tmH,pmH);
   // Estimated available hours per month: 6 courts × 14h/day × 30 days = 2520
   const estAvail=2520;
@@ -192,10 +204,8 @@ function TabComplejo({data}) {
   const aClr=['#B8963E','#3D2B1F','#D4C9B8','#8B6914','#8C7E6F','#A89A8A'];
 
   // Historical revenue for rendimiento chart
-  const hs24=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith('2024')).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales]);
-  const bk24=useMemo(()=>bookings.filter(b=>b.date?.startsWith('2024')&&b.activity_type!=='blocked').reduce((s,b)=>s+(b.price_eur||0),0),[bookings]);
-  const rev24=hs24+bk24;
-  const rev25=pyb.reduce((s,b)=>s+(b.price_eur||0),0);
+  const rev24=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith('2024')).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales]);
+  const rev25=pyRev; // from historical_sales 2025
   const rev26=tr;
   const proj26=cm>0?Math.round(rev26/cm*12):0;
 
@@ -221,9 +231,9 @@ function TabComplejo({data}) {
   return <div className="fade-in">
     {/* Row 1: 4 KPIs */}
     <div style={{...S.card,display:'flex',flexWrap:'wrap',justifyContent:'center'}}>
-      <KPI label={`INGRESOS ${MO[cm-1].toUpperCase()}`} value={fmt(tmr)} comp={`${cmp(tmr,momG)} vs ${MO[cm>1?cm-2:11].toLowerCase()}\n${cmp(tmr,yoyMG)} vs ${MO[cm-1].toLowerCase()} ${cy-1}`}/>
+      <KPI label={`INGRESOS ${MO[cm-1].toUpperCase()}`} value={fmt(tmr)} comp={`${cmp(tmr,momG)} vs ${MO[cm>1?cm-2:11].toLowerCase()}${yoyMG!=null?`\n${cmp(tmr,yoyMG)} vs ${MO[cm-1].toLowerCase()} ${cy-1}`:''}`}/>
       <Vdiv/>
-      <KPI label="INGRESOS YTD" value={fmt(tr)} comp={`${cmp(tr,yoyG)} vs ${cy-1}`}/>
+      <KPI label="INGRESOS YTD" value={fmt(tr)} comp={yoyG!=null?`${cmp(tr,yoyG)} vs ${cy-1}`:`${cm} meses`}/>
       <Vdiv/>
       <KPI label="TASA BCV" value={exchangeRate?`Bs ${Number(exchangeRate.eurRate).toLocaleString('es-VE',{maximumFractionDigits:0})}`:'—'} comp="Bs por REF" color={T.ch}/>
       <Vdiv/>
@@ -392,9 +402,12 @@ function TabParticipacion({data}) {
   const ytdDiv=(dividends[cy]||[]).reduce((s,d)=>s+d.wisiAmount,0);
   const pySame=(dividends[cy-1]||[]).filter(d=>{const m=gm(d.fecha);return m&&m<=cm}).reduce((s,d)=>s+d.wisiAmount,0);
   const ytdG=pctOf(ytdDiv,pySame);
-  const avgM=cm>0?ytdDiv/cm:0;
+  // Fix 4: divide by months that actually have dividends, not calendar month
+  const monthsWithDivs=new Set((dividends[cy]||[]).map(d=>gm(d.fecha)).filter(Boolean)).size;
+  const avgM=monthsWithDivs>0?ytdDiv/monthsWithDivs:0;
   const rem=inv-totalDiv;
-  const mtpb=avgM>0?Math.ceil(rem/avgM):null;
+  // Use ROI sheet meses restantes if available, otherwise calculate
+  const mtpb=roi?.mesesRestantes||( avgM>0?Math.ceil(rem/avgM):null);
 
   const mDiv=useMemo(()=>{const m=Array(12).fill(0);(dividends[cy]||[]).forEach(d=>{const mo=gm(d.fecha);if(mo)m[mo-1]+=d.wisiAmount});return m},[dividends,cy]);
 
@@ -511,7 +524,7 @@ function TabParticipacion({data}) {
       {[...(dividends[cy]||[])].reverse().slice(0,10).map((d,i)=>
         <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:`1px solid ${T.bg2}`}}>
           <span style={{fontSize:11,color:T.mu,fontFamily:T.sa,flex:1}}>{d.fecha}</span>
-          <span style={{fontSize:11,fontFamily:T.mo,color:T.ch,width:70,textAlign:'right'}}>{fmt(d.montoTotal)}</span>
+          <span style={{fontSize:11,fontFamily:T.mo,color:T.ch,width:70,textAlign:'right'}}>{fmt(d.montoTotal>0?d.montoTotal:Math.round(d.wisiAmount/(WISI_PCT/100)))}</span>
           <span style={{fontSize:10,fontFamily:T.sa,color:T.mu,width:70,textAlign:'right'}}>{d.bolivares>0?`Bs ${Number(d.bolivares).toLocaleString('es-VE',{maximumFractionDigits:0})}`:d.divisa||'—'}</span>
           <span style={{fontSize:11,fontFamily:T.mo,fontWeight:700,color:T.ch,width:70,textAlign:'right'}}>{fmt(d.wisiAmount,2)}</span>
         </div>
@@ -523,7 +536,7 @@ function TabParticipacion({data}) {
     <div style={S.card}>
       <div style={S.lbl}>RESUMEN</div>
       <p style={{fontSize:12,lineHeight:1.7,color:T.ch,fontFamily:T.sa,margin:'12px 0 0'}}>
-        En {cm} meses de {cy}, WISI ha recibido <b style={{fontFamily:T.mo}}>{fmt(ytdDiv)}</b> en dividendos,
+        En {monthsWithDivs} meses de {cy}, WISI ha recibido <b style={{fontFamily:T.mo}}>{fmt(ytdDiv)}</b> en dividendos,
         a un promedio de <b style={{fontFamily:T.mo}}>{fmt(avgM)}</b>/mes.
         {bestMonth&&<> El mejor mes fue <b>{MO[bestMonth.month-1]}</b> con <b style={{fontFamily:T.mo}}>{fmt(bestMonth.amt)}</b>.</>}
         {' '}El ROI acumulado es <b>{fmtPct(roiPct)}</b> sobre una inversion de <b style={{fontFamily:T.mo}}>{fmt(inv)}</b>.
@@ -543,7 +556,9 @@ function TabProyecciones({data}) {
   const inv=roi?.montoInvertido||WISI_INVESTMENT;
   const tDiv=roi?.dividendosRecibidos||[...(dividends[2024]||[]),...(dividends[2025]||[]),...(dividends[2026]||[])].reduce((s,d)=>s+d.wisiAmount,0);
   const ytdDiv=(dividends[cy]||[]).reduce((s,d)=>s+d.wisiAmount,0);
-  const curM=cm>0?ytdDiv/cm:0;
+  // Use months with actual dividends for accurate rate
+  const divMonths=new Set((dividends[cy]||[]).map(d=>gm(d.fecha)).filter(Boolean)).size;
+  const curM=divMonths>0?ytdDiv/divMonths:0;
   const rem=inv-tDiv;
 
   const sc=[
@@ -575,8 +590,9 @@ function TabProyecciones({data}) {
   const roiEoy2=(tDiv+curM*(mToEoy+24))/inv*100;
 
   // Valor participacion
-  // Estimate complex value at 10x annual revenue
-  const yb=bookings.filter(b=>b.date?.startsWith(String(cy))&&b.activity_type!=='blocked');
+  // Fix 7: filter future bookings here too
+  const today=now.toISOString().slice(0,10);
+  const yb=bookings.filter(b=>b.date?.startsWith(String(cy))&&b.date<=today&&b.activity_type!=='blocked');
   const annRev=cm>0?yb.reduce((s,b)=>s+(b.price_eur||0),0)/cm*12:0;
   const complexVal=annRev*10;
   const myVal=complexVal*WISI_PCT/100;
