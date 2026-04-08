@@ -141,16 +141,21 @@ function TabComplejo({data}) {
   const tmr=mr[cm-1]||0, lmr=cm>1?(mr[cm-2]||0):0, smly=pmr[cm-1]||0;
   const momG=pctOf(tmr,lmr), yoyMG=smly>0?pctOf(tmr,smly):null;
 
-  // Fix 2: F7+F11 as F7 group, F5+F5T as F5 group. Total = all non-blocked.
-  const f7r=useMemo(()=>yb.filter(b=>b.type==='F7'||b.type==='F11').reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
-  const f5r=useMemo(()=>yb.filter(b=>b.type==='F5'||b.type==='F5T').reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
+  // Revenue by court type — separate rows for each type
   const tr=useMemo(()=>yb.reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
+  const typeBreakdown=useMemo(()=>{
+    const map={};
+    yb.forEach(b=>{const t=b.type||'otro';map[t]=(map[t]||0)+(b.price_eur||0)});
+    return Object.entries(map).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  },[yb]);
+  const typeColors={F7:T.gold,F11:T.gd,F5:T.dv,F5T:'#A89A8A'};
   // 2025 comparison from historical_sales
   const pyRev=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy]);
-  const pyf7r=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))&&(s.court_type==='F7'||s.court_type==='F11')).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy]);
-  const pyf5r=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))&&(s.court_type==='F5'||s.court_type==='F5T')).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy]);
-  const f7pct25=pyRev>0?pyf7r/pyRev*100:0;
-  const f5pct25=pyRev>0?pyf5r/pyRev*100:0;
+  const pyTypeBreakdown=useMemo(()=>{
+    const map={};
+    (historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const t=s.court_type||'otro';map[t]=(map[t]||0)+(s.total_ref||0)});
+    return map;
+  },[historicalSales,cy]);
 
   // YTD comparison using historical_sales for 2025
   const pySame=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))&&gm(s.sale_date)<=cm).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy,cm]);
@@ -194,8 +199,9 @@ function TabComplejo({data}) {
   const pmH=useMemo(()=>{const pm=cm>1?cm-1:12;return yb.filter(b=>gm(b.date)===pm).reduce((s,b)=>s+(b.duration||0),0)},[yb,cm]);
   const tmH=useMemo(()=>yb.filter(b=>gm(b.date)===cm).reduce((s,b)=>s+(b.duration||0),0),[yb,cm]);
   const occG=pctOf(tmH,pmH);
-  // Estimated available hours per month: 6 courts × 14h/day × 30 days = 2520
-  const estAvail=2520;
+  // Available hours per court YTD: days from Jan 1 to today × 14h/day (8am-10pm)
+  const daysElapsed=Math.floor((now.getTime()-new Date(cy,0,1).getTime())/86400000)+1;
+  const availPerCourt=daysElapsed*14;
 
   // Activity (no blocked)
   const ab=useMemo(()=>{const m={};yb.forEach(b=>{const t=b.activity_type||'otro';m[t]=(m[t]||0)+(b.price_eur||0)});return m},[yb]);
@@ -249,28 +255,23 @@ function TabComplejo({data}) {
       <KPI label={`CUMPLEANOS ${MO[cm-1].toUpperCase()}`} value={tmBd.toString()} comp={`${cm>1?tmBd-lmBd>=0?'+':'':''}${cm>1?tmBd-lmBd:0} vs ${MO[cm>1?cm-2:11].toLowerCase()} | ${smBd25>0?'vs '+smBd25+' en 2025':'Primer ano'}`} color={T.ch}/>
     </div>
 
-    {/* F7 vs F5 */}
+    {/* Court Type Breakdown */}
     <div style={S.div}/>
     <div style={S.card}>
-      <div style={S.lbl}>F7 VS F5 — {cy}</div>
-      <div style={{marginTop:16}}>
-        <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-          <span style={{fontSize:12,fontFamily:T.sa,fontWeight:600,color:T.ch}}>F7</span>
-          <span style={{fontSize:12,fontFamily:T.mo,color:T.ch}}>{fmt(f7r)} ({tr>0?fmtPct(f7r/tr*100):'0%'}) <span style={{fontSize:10,color:T.mu}}>vs {fmtPct(f7pct25)} en {cy-1}</span></span>
-        </div>
-        <div style={{background:T.bg2,borderRadius:20,height:5}}>
-          <div style={{width:`${tr>0?f7r/tr*100:0}%`,height:'100%',background:T.gold,borderRadius:20}}/>
-        </div>
-      </div>
-      <div style={{marginTop:12}}>
-        <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
-          <span style={{fontSize:12,fontFamily:T.sa,fontWeight:600,color:T.ch}}>F5</span>
-          <span style={{fontSize:12,fontFamily:T.mo,color:T.ch}}>{fmt(f5r)} ({tr>0?fmtPct(f5r/tr*100):'0%'}) <span style={{fontSize:10,color:T.mu}}>vs {fmtPct(f5pct25)} en {cy-1}</span></span>
-        </div>
-        <div style={{background:T.bg2,borderRadius:20,height:5}}>
-          <div style={{width:`${tr>0?f5r/tr*100:0}%`,height:'100%',background:T.dv,borderRadius:20}}/>
-        </div>
-      </div>
+      <div style={S.lbl}>DISTRIBUCION POR TIPO — {cy}</div>
+      {typeBreakdown.map(([type,rev],i)=>{
+        const pct=tr>0?rev/tr*100:0;
+        const py25pct=pyRev>0&&pyTypeBreakdown[type]?(pyTypeBreakdown[type]/pyRev*100):null;
+        return <div key={type} style={{marginTop:i>0?12:16}}>
+          <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
+            <span style={{fontSize:12,fontFamily:T.sa,fontWeight:600,color:T.ch}}>{type}</span>
+            <span style={{fontSize:12,fontFamily:T.mo,color:T.ch}}>{fmt(rev)} ({fmtPct(pct)}){py25pct!=null?<span style={{fontSize:10,color:T.mu}}> vs {fmtPct(py25pct)} en {cy-1}</span>:''}</span>
+          </div>
+          <div style={{background:T.bg2,borderRadius:20,height:5}}>
+            <div style={{width:`${pct}%`,height:'100%',background:typeColors[type]||T.mu,borderRadius:20}}/>
+          </div>
+        </div>;
+      })}
     </div>
 
     {/* Tendencia Mensual 2025 vs 2026 */}
@@ -346,7 +347,7 @@ function TabComplejo({data}) {
       <div style={{marginTop:16}}>
         {ch.map((c,i)=>{
           const mx=ch[0]?.hours||1;
-          const occPct=estAvail>0?(c.hours/(estAvail/6)*100):0; // per court
+          const occPct=availPerCourt>0?(c.hours/availPerCourt*100):0;
           return <div key={i} style={{marginBottom:10}}>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
               <span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{c.name} <span style={{color:T.mu}}>({c.type})</span></span>
@@ -424,6 +425,11 @@ function TabParticipacion({data}) {
     return Object.values(map).sort((a,b)=>a.month-b.month);
   },[dividends,cy]);
   const bestMonth=mBreak.length>0?mBreak.reduce((a,b)=>b.amt>a.amt?b:a):null;
+
+  // Bs vs USD breakdown (all years combined)
+  const divUsd=allDivs.filter(d=>d.divisa==='SI').reduce((s,d)=>s+d.wisiAmount,0);
+  const divBs=allDivs.filter(d=>d.divisa!=='SI').reduce((s,d)=>s+d.wisiAmount,0);
+  const divTotal=divUsd+divBs;
 
   return <div className="fade-in">
     {/* Hero — white card with gold border, NOT dark brown */}
@@ -510,25 +516,53 @@ function TabParticipacion({data}) {
       </div>
     </div>
 
+    {/* Composicion Bs vs USD */}
+    <div style={S.div}/>
+    <div style={S.card}>
+      <div style={S.lbl}>COMPOSICION DE DIVIDENDOS</div>
+      <div style={{display:'flex',gap:12,marginTop:16}}>
+        <div style={{flex:1,background:T.bg2,borderRadius:8,padding:16,textAlign:'center'}}>
+          <div style={{fontSize:9,textTransform:'uppercase',letterSpacing:2,color:T.mu,fontFamily:T.sa,marginBottom:6}}>BOLIVARES</div>
+          <div style={{fontSize:20,fontWeight:400,fontFamily:T.se,color:T.ch,letterSpacing:-1}}>{fmt(divBs)}</div>
+          <div style={{fontSize:10,color:T.mu,fontFamily:T.sa,marginTop:4}}>{divTotal>0?fmtPct(divBs/divTotal*100):'0%'} del total</div>
+        </div>
+        <div style={{flex:1,background:T.bg2,borderRadius:8,padding:16,textAlign:'center'}}>
+          <div style={{fontSize:9,textTransform:'uppercase',letterSpacing:2,color:T.mu,fontFamily:T.sa,marginBottom:6}}>USD CASH</div>
+          <div style={{fontSize:20,fontWeight:400,fontFamily:T.se,color:T.gd,letterSpacing:-1}}>{fmt(divUsd)}</div>
+          <div style={{fontSize:10,color:T.mu,fontFamily:T.sa,marginTop:4}}>{divTotal>0?fmtPct(divUsd/divTotal*100):'0%'} del total</div>
+        </div>
+      </div>
+    </div>
+
     {/* Ultimos Pagos */}
     <div style={S.div}/>
     <div style={S.card}>
       <div style={S.lbl}>ULTIMOS PAGOS</div>
       {/* Header */}
-      <div style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:`1px solid ${T.dv}`,marginTop:8}}>
+      <div style={{display:'flex',padding:'8px 0',borderBottom:`1px solid ${T.dv}`,marginTop:8}}>
         <span style={{fontSize:9,color:T.mu,fontFamily:T.sa,flex:1}}>FECHA</span>
-        <span style={{fontSize:9,color:T.mu,fontFamily:T.sa,width:70,textAlign:'right'}}>TOTAL</span>
-        <span style={{fontSize:9,color:T.mu,fontFamily:T.sa,width:70,textAlign:'right'}}>BS/DIV</span>
+        <span style={{fontSize:9,color:T.mu,fontFamily:T.sa,width:120,textAlign:'right'}}>TOTAL COMPLEJO</span>
+        <span style={{fontSize:9,color:T.mu,fontFamily:T.sa,width:40,textAlign:'center'}}>DIV</span>
         <span style={{fontSize:9,color:T.mu,fontFamily:T.sa,width:70,textAlign:'right'}}>WISI</span>
       </div>
-      {[...(dividends[cy]||[])].reverse().slice(0,10).map((d,i)=>
-        <div key={i} style={{display:'flex',justifyContent:'space-between',padding:'6px 0',borderBottom:`1px solid ${T.bg2}`}}>
+      {[...(dividends[cy]||[])].reverse().slice(0,10).map((d,i)=>{
+        const isUsd=d.divisa==='SI';
+        const totalEst=Math.round(d.wisiAmount/(WISI_PCT/100));
+        return <div key={i} style={{display:'flex',padding:'6px 0',borderBottom:`1px solid ${T.bg2}`,alignItems:'center'}}>
           <span style={{fontSize:11,color:T.mu,fontFamily:T.sa,flex:1}}>{d.fecha}</span>
-          <span style={{fontSize:11,fontFamily:T.mo,color:T.ch,width:70,textAlign:'right'}}>{fmt(d.montoTotal>0?d.montoTotal:Math.round(d.wisiAmount/(WISI_PCT/100)))}</span>
-          <span style={{fontSize:10,fontFamily:T.sa,color:T.mu,width:70,textAlign:'right'}}>{d.bolivares>0?`Bs ${Number(d.bolivares).toLocaleString('es-VE',{maximumFractionDigits:0})}`:d.divisa||'—'}</span>
+          <span style={{fontSize:10,fontFamily:T.mo,color:T.ch,width:120,textAlign:'right'}}>
+            {isUsd
+              ? fmt(d.montoTotal>0?d.montoTotal:totalEst)
+              : d.bolivares>0
+                ? `Bs ${Number(d.bolivares).toLocaleString('es-VE',{maximumFractionDigits:0})}`
+                : fmt(totalEst)
+            }
+            {!isUsd&&d.bolivares>0&&<span style={{fontSize:9,color:T.mu}}> ({fmt(totalEst)})</span>}
+          </span>
+          <span style={{fontSize:10,fontFamily:T.sa,color:isUsd?T.gd:T.mu,width:40,textAlign:'center',fontWeight:600}}>{isUsd?'USD':'Bs'}</span>
           <span style={{fontSize:11,fontFamily:T.mo,fontWeight:700,color:T.ch,width:70,textAlign:'right'}}>{fmt(d.wisiAmount,2)}</span>
-        </div>
-      )}
+        </div>;
+      })}
     </div>
 
     {/* Parrafo resumen */}
@@ -566,9 +600,6 @@ function TabProyecciones({data}) {
     {name:'Base',monthly:Math.round(curM||1530),color:T.gold,desc:'Ritmo actual proyectado'},
     {name:'Optimista',monthly:2200,color:T.gd,desc:'Con mejoras operativas'},
   ];
-
-  const mx=60;
-  const curves=sc.map(s=>{const c=[];let cum=tDiv;for(let m=0;m<=mx;m++){c.push(cum);cum+=s.monthly}return c});
 
   const proj=sc.map(s=>({
     ...s,
@@ -631,22 +662,6 @@ function TabProyecciones({data}) {
         </div>
       </div>
     )}
-
-    {/* Payback Curve */}
-    <div style={S.div}/>
-    <div style={S.card}>
-      <div style={S.lbl}>CURVA DE PAYBACK</div>
-      <div style={{height:220,marginTop:16}}>
-        <Line data={{
-          labels:Array.from({length:mx+1},(_,i)=>{if(i%6===0){const d=new Date(now);d.setMonth(d.getMonth()+i);return i===0?'Hoy':`${MO[d.getMonth()]} '${d.getFullYear().toString().slice(2)}`}return ''}),
-          datasets:[
-            {label:'Inversion',data:Array(mx+1).fill(inv),borderColor:'#B71C1C55',borderDash:[4,4],borderWidth:1.5,pointRadius:0,fill:false},
-            ...sc.map((s,i)=>({label:s.name,data:curves[i],borderColor:s.color,borderWidth:2,pointRadius:3,hoverRadius:5,fill:false,tension:0.4})),
-          ]
-        }} options={{...CO,plugins:{...CO.plugins,legend:{display:false}},scales:{...CO.scales,y:{...CO.scales.y,min:0,max:100000}}}}/>
-      </div>
-      <Leg items={[{label:'Inversion',color:T.rd,dashed:true},{label:'Conservador',color:T.dv},{label:'Base',color:T.gold},{label:'Optimista',color:T.gd}]}/>
-    </div>
 
     {/* Ritmos Necesarios */}
     <div style={S.div}/>
