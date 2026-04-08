@@ -7,7 +7,7 @@ import {
   CategoryScale, LinearScale, BarElement, LineElement,
   PointElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js';
-import { Bar, Line, Doughnut } from 'react-chartjs-2';
+import { Bar, Doughnut } from 'react-chartjs-2';
 import { Loader2, LogOut } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend, Filler);
@@ -747,6 +747,20 @@ function TabProyecciones({data}) {
   </div>;
 }
 
+// ─── Error Boundary ─────────────────────────────────────────
+import React from 'react';
+class ErrorBoundary extends React.Component {
+  constructor(props){super(props);this.state={error:null}}
+  static getDerivedStateFromError(e){return {error:e}}
+  render(){
+    if(this.state.error) return <div style={{...S.card,borderColor:T.rd,margin:16}}>
+      <div style={{...S.lbl,color:T.rd}}>ERROR DE RENDERIZADO</div>
+      <pre style={{fontSize:11,color:T.rd,fontFamily:T.mo,whiteSpace:'pre-wrap',margin:'8px 0',maxHeight:200,overflow:'auto'}}>{this.state.error?.message}{'\n'}{this.state.error?.stack}</pre>
+    </div>;
+    return this.props.children;
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN APP
 // ═══════════════════════════════════════════════════════════════
@@ -809,11 +823,11 @@ export default function Home() {
         <p style={{fontSize:12,color:T.rd,margin:0}}>{err}</p>
         <button onClick={()=>fetchData(session.access_token)} style={{fontSize:11,color:T.rd,background:'none',border:'none',textDecoration:'underline',cursor:'pointer',marginTop:8,fontFamily:T.sa}}>Reintentar</button>
       </div>}
-      {data&&!dl&&<>
+      {data&&!dl&&<ErrorBoundary>
         {tab===0&&<TabComplejo data={data}/>}
         {tab===1&&<TabParticipacion data={data}/>}
         {tab===2&&<TabProyecciones data={data}/>}
-      </>}
+      </ErrorBoundary>}
     </main>
   </div>;
 }
