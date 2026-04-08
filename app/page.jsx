@@ -265,7 +265,7 @@ function TabComplejo({data}) {
         return <div key={type} style={{marginTop:i>0?12:16}}>
           <div style={{display:'flex',justifyContent:'space-between',marginBottom:4}}>
             <span style={{fontSize:12,fontFamily:T.sa,fontWeight:600,color:T.ch}}>{type}</span>
-            <span style={{fontSize:12,fontFamily:T.mo,color:T.ch}}>{fmt(rev)} ({fmtPct(pct)}){py25pct!=null?<span style={{fontSize:10,color:T.mu}}> vs {fmtPct(py25pct)} en {cy-1}</span>:''}</span>
+            <span style={{fontSize:12,fontFamily:T.mo,color:T.ch}}>{fmt(rev)} ({fmtPct(pct)}){py25pct!=null&&<span style={{fontSize:10,color:T.mu}}> vs {fmtPct(py25pct)} en {cy-1}</span>}</span>
           </div>
           <div style={{background:T.bg2,borderRadius:20,height:5}}>
             <div style={{width:`${pct}%`,height:'100%',background:typeColors[type]||T.mu,borderRadius:20}}/>
