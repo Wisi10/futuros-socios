@@ -4,13 +4,13 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from './lib/supabase';
 import {
   Chart as ChartJS,
-  CategoryScale, LinearScale, BarElement, LineElement,
+  CategoryScale, LinearScale, BarElement, LineElement, LineController,
   PointElement, ArcElement, Tooltip, Legend, Filler
 } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { Loader2, LogOut } from 'lucide-react';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Tooltip, Legend, Filler);
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, LineController, PointElement, ArcElement, Tooltip, Legend, Filler);
 
 // ─── Theme ──────────────────────────────────────────────────
 const T = {
