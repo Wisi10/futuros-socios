@@ -127,22 +127,30 @@ function TabComplejo({data}) {
   // 2025 bookings = 0 in this table, use historical_sales for 2025 comparisons
   const pyb=useMemo(()=>bookings.filter(b=>b.date?.startsWith(String(cy-1))&&b.activity_type!=='blocked'),[bookings,cy]);
 
-  // Fix 3: 2025 monthly revenue from historical_sales (total_ref is already in REF/EUR)
-  const mr=useMemo(()=>{const m=Array(12).fill(0);yb.forEach(b=>{const mo=gm(b.date);if(mo)m[mo-1]+=(b.price_eur||0)});return m},[yb]);
+  // 2026 monthly revenue: use historical_sales where available, bookings for the rest
+  // (historical_sales covers Jan-Mar 2026, bookings covers Feb+ with overlap)
+  const mr=useMemo(()=>{
+    const m=Array(12).fill(0);
+    const hsMonths=new Set();
+    (historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy))).forEach(s=>{
+      const mo=gm(s.sale_date);if(mo){m[mo-1]+=(s.total_ref||0);hsMonths.add(mo)}
+    });
+    // Only add bookings for months NOT covered by historical_sales
+    yb.forEach(b=>{const mo=gm(b.date);if(mo&&!hsMonths.has(mo))m[mo-1]+=(b.price_eur||0)});
+    return m;
+  },[yb,historicalSales,cy]);
+  // 2025 monthly revenue from historical_sales
   const pmr=useMemo(()=>{
     const m=Array(12).fill(0);
-    // bookings 2025 (likely empty)
-    pyb.forEach(b=>{const mo=gm(b.date);if(mo)m[mo-1]+=(b.price_eur||0)});
-    // historical_sales 2025 (has the real data)
     (historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const mo=gm(s.sale_date);if(mo)m[mo-1]+=(s.total_ref||0)});
     return m;
-  },[pyb,historicalSales,cy]);
+  },[historicalSales,cy]);
 
   const tmr=mr[cm-1]||0, lmr=cm>1?(mr[cm-2]||0):0, smly=pmr[cm-1]||0;
   const momG=pctOf(tmr,lmr), yoyMG=smly>0?pctOf(tmr,smly):null;
 
-  // Revenue by court type — separate rows for each type
-  const tr=useMemo(()=>yb.reduce((s,b)=>s+(b.price_eur||0),0),[yb]);
+  // Total YTD revenue (consistent with mr)
+  const tr=useMemo(()=>mr.reduce((s,v)=>s+v,0),[mr]);
   const typeBreakdown=useMemo(()=>{
     const map={};
     yb.forEach(b=>{const t=b.type||'otro';map[t]=(map[t]||0)+(b.price_eur||0)});
@@ -411,6 +419,7 @@ function TabParticipacion({data}) {
   const mtpb=roi?.mesesRestantes||( avgM>0?Math.ceil(rem/avgM):null);
 
   const mDiv=useMemo(()=>{const m=Array(12).fill(0);(dividends[cy]||[]).forEach(d=>{const mo=gm(d.fecha);if(mo)m[mo-1]+=d.wisiAmount});return m},[dividends,cy]);
+  const mDiv25=useMemo(()=>{const m=Array(12).fill(0);(dividends[cy-1]||[]).forEach(d=>{const mo=gm(d.fecha);if(mo)m[mo-1]+=d.wisiAmount});return m},[dividends,cy]);
 
   const yTot=[
     totales?.total2024||(dividends[2024]||[]).reduce((s,d)=>s+d.wisiAmount,0),
@@ -465,20 +474,20 @@ function TabParticipacion({data}) {
     <div style={{...S.card,marginTop:12,display:'flex',justifyContent:'center'}}>
       <KPI label={`DIVIDENDOS ${cy}`} value={fmt(ytdDiv)} comp={`${cmp(ytdDiv,ytdG)} vs ${cy-1}`}/>
       <Vdiv/>
-      <KPI label="PROMEDIO/MES" value={fmt(avgM)} comp={`${cm} meses`}/>
+      <KPI label="PROMEDIO/MES" value={fmt(avgM)} comp={`${monthsWithDivs} meses con pagos`}/>
     </div>
 
-    {/* Monthly Dividends Chart */}
+    {/* Monthly Dividends 2025 vs 2026 */}
     <div style={S.div}/>
     <div style={S.card}>
-      <div style={S.lbl}>DIVIDENDOS MENSUALES {cy} — WISI</div>
-      <div style={{height:180,marginTop:16}}>
-        <Bar data={{labels:MO,datasets:[{
-          data:mDiv,
-          backgroundColor:mDiv.map((_,i)=>i<cm?T.gold:'rgba(184,150,62,0.15)'),
-          borderRadius:8,barThickness:16,
-        }]}} options={{...CO,scales:{...CO.scales,y:{...CO.scales.y,ticks:{...CO.scales.y.ticks,callback:v=>`$${v.toLocaleString()}`}}}}}/>
+      <div style={S.lbl}>MIS DIVIDENDOS — {cy-1} VS {cy}</div>
+      <div style={{height:200,marginTop:16}}>
+        <Bar data={{labels:MO,datasets:[
+          {label:String(cy-1),data:mDiv25,backgroundColor:T.dv,borderRadius:8,barPercentage:0.8,categoryPercentage:0.7},
+          {label:String(cy),data:mDiv.map((v,i)=>i<cm?v:null),backgroundColor:T.gold,borderRadius:8,barPercentage:0.8,categoryPercentage:0.7},
+        ]}} options={{...CO,scales:{...CO.scales,y:{...CO.scales.y,ticks:{...CO.scales.y.ticks,callback:v=>`$${v.toLocaleString()}`}}}}}/>
       </div>
+      <Leg items={[{label:String(cy-1),color:T.dv},{label:String(cy),color:T.gold}]}/>
     </div>
 
     {/* Year over Year */}
@@ -639,7 +648,31 @@ function TabProyecciones({data}) {
   const bdAvg=cm>0?curBdays/cm:0;
 
   return <div className="fade-in">
+    {/* Palancas de Crecimiento — first, most actionable */}
+    <div style={S.card}>
+      <div style={S.lbl}>PALANCAS DE CRECIMIENTO</div>
+      <div style={{marginTop:16}}>
+        <div style={S.row}><div>
+          <div style={{fontSize:12,fontWeight:700,color:T.ch,fontFamily:T.sa}}>Mas Cumpleanos</div>
+          <div style={{fontSize:11,color:T.mu,fontFamily:T.sa,marginTop:2}}>Actual: {bdAvg.toFixed(1)}/mes. 2025: ~10/mes. Cada uno = ~REF 300-500.</div>
+        </div></div>
+        {under.length>0&&<div style={S.row}><div>
+          <div style={{fontSize:12,fontWeight:700,color:T.ch,fontFamily:T.sa}}>Activar Canchas Subutilizadas</div>
+          <div style={{fontSize:11,color:T.mu,fontFamily:T.sa,marginTop:2}}>{under.map(c=>c.name).join(', ')} con &lt;60h YTD. Potencial: +REF 500-1,000/mes.</div>
+        </div></div>}
+        <div style={S.row}><div>
+          <div style={{fontSize:12,fontWeight:700,color:T.ch,fontFamily:T.sa}}>Cobrar Pendientes</div>
+          <div style={{fontSize:11,color:T.mu,fontFamily:T.sa,marginTop:2}}>Reducir morosidad mejora el flujo directo de dividendos.</div>
+        </div></div>
+        <div style={{...S.row,borderBottom:'none'}}><div>
+          <div style={{fontSize:12,fontWeight:700,color:T.ch,fontFamily:T.sa}}>Cantina + Eventos</div>
+          <div style={{fontSize:11,color:T.mu,fontFamily:T.sa,marginTop:2}}>Ingresos de cantina y torneos suman al fondo distribuible.</div>
+        </div></div>
+      </div>
+    </div>
+
     {/* 3 Scenarios */}
+    <div style={S.div}/>
     {proj.map((s,i)=>
       <div key={i} style={{...S.card,borderLeft:`4px solid ${s.color}`,marginBottom:12}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
@@ -711,29 +744,6 @@ function TabProyecciones({data}) {
       </div>
     </div>
 
-    {/* Palancas */}
-    <div style={S.div}/>
-    <div style={S.card}>
-      <div style={S.lbl}>PALANCAS DE CRECIMIENTO</div>
-      <div style={{marginTop:16}}>
-        <div style={S.row}><div>
-          <div style={{fontSize:12,fontWeight:700,color:T.ch,fontFamily:T.sa}}>Mas Cumpleanos</div>
-          <div style={{fontSize:11,color:T.mu,fontFamily:T.sa,marginTop:2}}>Actual: {bdAvg.toFixed(1)}/mes. 2025: ~10/mes. Cada uno = ~REF 300-500.</div>
-        </div></div>
-        {under.length>0&&<div style={S.row}><div>
-          <div style={{fontSize:12,fontWeight:700,color:T.ch,fontFamily:T.sa}}>Activar Canchas Subutilizadas</div>
-          <div style={{fontSize:11,color:T.mu,fontFamily:T.sa,marginTop:2}}>{under.map(c=>c.name).join(', ')} con &lt;60h YTD. Potencial: +REF 500-1,000/mes.</div>
-        </div></div>}
-        <div style={S.row}><div>
-          <div style={{fontSize:12,fontWeight:700,color:T.ch,fontFamily:T.sa}}>Cobrar Pendientes</div>
-          <div style={{fontSize:11,color:T.mu,fontFamily:T.sa,marginTop:2}}>Reducir morosidad mejora el flujo directo de dividendos.</div>
-        </div></div>
-        <div style={{...S.row,borderBottom:'none'}}><div>
-          <div style={{fontSize:12,fontWeight:700,color:T.ch,fontFamily:T.sa}}>Cantina + Eventos</div>
-          <div style={{fontSize:11,color:T.mu,fontFamily:T.sa,marginTop:2}}>Ingresos de cantina y torneos suman al fondo distribuible.</div>
-        </div></div>
-      </div>
-    </div>
   </div>;
 }
 
