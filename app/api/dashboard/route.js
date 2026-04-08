@@ -130,7 +130,7 @@ export async function GET(request) {
       bookings, courts, historicalSales, payments, exchangeRateRes,
       div2024Res, div2025Res, div2026Res, roiRes, totalesRes,
     ] = await Promise.all([
-      fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration'),
+      fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration,client_name'),
       supabase.from('courts').select('*').order('id'),
       fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,duration_hours'),
       fetchAllRows('payments', 'id,booking_id,amount_eur,currency,method,created_at'),
