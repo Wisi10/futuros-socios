@@ -240,7 +240,7 @@ function TabComplejo({data}){
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>DISTRIBUCION POR TIPO DE PAGO — {cy}</div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:16}}>
-        {[{label:'REF (EUR)',amt:payByMethod.eur.amt,cnt:payByMethod.eur.cnt,color:T.gold},{label:'USD',amt:payByMethod.usd.amt,cnt:payByMethod.usd.cnt,color:T.gd},{label:'Bolivares',amt:payByMethod.bs.amt,cnt:payByMethod.bs.cnt,color:T.dv}].map((p,i)=><div key={i} style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>{p.label}</div><div style={{...S.bigNum,fontSize:18,color:p.color}}>{fmt(p.amt)}</div><div style={{...S.mono,fontSize:9,marginTop:4}}>{p.cnt} pagos · {payByMethod.tot>0?fmtPct(p.amt/payByMethod.tot*100):'0%'}</div></div>)}
+        {[{label:'REF',amt:payByMethod.eur.amt,cnt:payByMethod.eur.cnt,color:T.gold},{label:'USD',amt:payByMethod.usd.amt,cnt:payByMethod.usd.cnt,color:T.gd},{label:'Bolivares',amt:payByMethod.bs.amt,cnt:payByMethod.bs.cnt,color:T.dv}].map((p,i)=><div key={i} style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>{p.label}</div><div style={{...S.bigNum,fontSize:18,color:p.color}}>{fmt(p.amt)}</div><div style={{...S.mono,fontSize:9,marginTop:4}}>{p.cnt} pagos · {payByMethod.tot>0?fmtPct(p.amt/payByMethod.tot*100):'0%'}</div></div>)}
       </div>
     </div>
 
