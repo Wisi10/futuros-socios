@@ -48,8 +48,8 @@ function parseDividendSheet(rows, year) {
   const partnerCols = findPartnerColumns(headers);
   const fechaIdx = 0;
   const montoIdx = 1;
-  const bsIdx = headers.findIndex(h => h && h.trim() === 'BOLIVARES');
-  const divisaIdx = headers.findIndex(h => h && h.trim() === 'DIVISA');
+  // New standardized structure: METODO is col C (USD/Bs), COMENTARIOS is last col
+  const metodoIdx = headers.findIndex(h => h && h.trim() === 'METODO');
   const comentIdx = headers.findIndex(h => h && h.trim() === 'COMENTARIOS');
 
   return rows.slice(1)
@@ -59,32 +59,14 @@ function parseDividendSheet(rows, year) {
       for (const [name, idx] of Object.entries(partnerCols)) {
         partners[name] = parseNum(r[idx]);
       }
-      // Classify payment as USD or Bs
-      const rawDivisa = divisaIdx >= 0 ? (r[divisaIdx] || '').trim() : '';
+      const metodo = metodoIdx >= 0 ? (r[metodoIdx] || '').trim() : '';
       const comentario = comentIdx >= 0 ? (r[comentIdx] || '').trim() : '';
-      let esUsd = false;
-      if (rawDivisa === 'SI') {
-        esUsd = true;
-      } else if (rawDivisa === 'NO') {
-        esUsd = false;
-      } else {
-        // No DIVISA column (2024/2025) — parse COMENTARIOS
-        // Order matters: check 'bs tasa' before 'bs' alone
-        const c = comentario.toLowerCase();
-        if (c.includes('bs tasa') || c.includes('bolivares') || c.match(/\bbs\b/)) {
-          esUsd = false;
-        } else if (c.includes('divisa') || c.includes('efectivo') || c.includes('zelle') || c.includes('cash')) {
-          esUsd = true;
-        } else {
-          esUsd = false; // default = Bs
-        }
-      }
       return {
         fecha: r[fechaIdx],
         montoTotal: parseNum(r[montoIdx]),
         partners,
-        bolivares: bsIdx >= 0 ? parseNum(r[bsIdx]) : 0,
-        divisa: esUsd ? 'SI' : 'NO',
+        bolivares: 0,
+        divisa: metodo === 'USD' ? 'SI' : 'NO',
         comentario,
         year,
       };
@@ -155,9 +137,9 @@ export async function GET(request) {
       fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,duration_hours'),
       fetchAllRows('payments', 'id,booking_id,amount_eur,currency,method,created_at'),
       supabase.from('exchange_rates').select('eur_rate,usd_rate,created_at').order('created_at', { ascending: false }).limit(1),
-      getSheetData(SHEET_ID, 'Dividendos 2024!A1:P50').catch(() => ({ values: [] })),
-      getSheetData(SHEET_ID, 'Dividendos 2025!A1:P50').catch(() => ({ values: [] })),
-      getSheetData(SHEET_ID, 'Dividendos 2026!A1:W50').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Dividendos 2024!A1:T50').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Dividendos 2025!A1:T50').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Dividendos 2026!A1:T50').catch(() => ({ values: [] })),
       getSheetData(SHEET_ID, 'ROI!A1:H20').catch(() => ({ values: [] })),
       getSheetData(SHEET_ID, 'Totales Historicos!A1:G20').catch(() => ({ values: [] })),
     ]);
