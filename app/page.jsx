@@ -216,9 +216,9 @@ function TabComplejo({data}){
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>RENDIMIENTO HISTORICO</div>
       <div style={{height:180,marginTop:16}}>
-        <Bar data={{labels:['2024','2025',`2026 YTD`],datasets:[{data:[rev24,rev25,rev26],backgroundColor:[T.dv,T.gold,T.gd],borderRadius:10,borderSkipped:false,barThickness:40}]}} options={CO}/>
+        <Bar data={{labels:['2024','2025',`2026 YTD`],datasets:[{data:[rev24,rev25,rev26],backgroundColor:[T.dv,T.gold,T.gd],borderRadius:10,borderSkipped:false,barThickness:60}]}} options={CO}/>
       </div>
-      <div style={{display:'flex',justifyContent:'space-between',marginTop:16}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',marginTop:16}}>
         {[{y:'2024',v:rev24},{y:'2025',v:rev25},{y:'2026 YTD',v:rev26}].map((r,i)=><div key={i} style={{textAlign:'center'}}><div style={S.moB}>{fmt(r.v)}</div><div style={{fontSize:10,color:T.mu,marginTop:2,fontFamily:T.sa}}>{r.y}</div></div>)}
       </div>
       <div style={{...S.mono,textAlign:'center',marginTop:10,fontSize:10}}>Proyeccion {cy}: ~{fmt(proj26)}</div>
@@ -356,20 +356,20 @@ function TabParticipacion({data,partnerKey}){
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>COMPARACION ANUAL</div>
       <div style={{height:180,marginTop:16}}>
-        <Bar data={{labels:['2024','2025','2026 YTD'],datasets:[{data:yTot,backgroundColor:[T.dv,T.gold,T.gd],borderRadius:10,borderSkipped:false,barThickness:40}]}} options={CO}/>
+        <Bar data={{labels:['2024','2025','2026 YTD'],datasets:[{data:yTot,backgroundColor:[T.dv,T.gold,T.gd],borderRadius:10,borderSkipped:false,barThickness:60}]}} options={CO}/>
       </div>
-      <div style={{display:'flex',justifyContent:'space-between',marginTop:16}}>{['2024','2025','2026 YTD'].map((y,i)=><div key={y} style={{textAlign:'center'}}><div style={S.moB}>{fmt(yTot[i])}</div><div style={{fontSize:10,color:T.mu,marginTop:2,fontFamily:T.sa}}>{y}</div></div>)}</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',marginTop:16}}>{['2024','2025','2026 YTD'].map((y,i)=><div key={y} style={{textAlign:'center'}}><div style={S.moB}>{fmt(yTot[i])}</div><div style={{fontSize:10,color:T.mu,marginTop:2,fontFamily:T.sa}}>{y}</div></div>)}</div>
     </div>
 
     {/* Composicion Bs/USD */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>COMPOSICION DE MIS DIVIDENDOS</div>
+      <div style={S.lbl}>COMPOSICION DE DIVIDENDOS — {pk}</div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:16}}>
         <div style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>BOLIVARES</div><div style={{...S.bigNum,fontSize:20,color:T.ch}}>{fmt(divBs)}</div><div style={{...S.mono,fontSize:10,marginTop:4}}>{divT>0?fmtPct(divBs/divT*100):'0%'}</div></div>
         <div style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>USD CASH</div><div style={{...S.bigNum,fontSize:20,color:T.gd}}>{fmt(divUsd)}</div><div style={{...S.mono,fontSize:10,marginTop:4}}>{divT>0?fmtPct(divUsd/divT*100):'0%'}</div></div>
       </div>
-      <div style={{...S.mono,fontSize:9,marginTop:8,textAlign:'center'}}>Bs/USD solo distinguible en 2026 · 2024-2025 cuenta como Bs</div>
+      <div style={{...S.mono,fontSize:9,marginTop:8,textAlign:'center'}}>Clasificado por metodo de pago (2024-25: comentarios, 2026: columna DIVISA)</div>
     </div>
 
     {/* Ultimos Pagos */}

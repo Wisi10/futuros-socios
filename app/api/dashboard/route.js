@@ -59,13 +59,33 @@ function parseDividendSheet(rows, year) {
       for (const [name, idx] of Object.entries(partnerCols)) {
         partners[name] = parseNum(r[idx]);
       }
+      // Classify payment as USD or Bs
+      const rawDivisa = divisaIdx >= 0 ? (r[divisaIdx] || '').trim() : '';
+      const comentario = comentIdx >= 0 ? (r[comentIdx] || '').trim() : '';
+      let esUsd = false;
+      if (rawDivisa === 'SI') {
+        esUsd = true;
+      } else if (rawDivisa === 'NO') {
+        esUsd = false;
+      } else {
+        // No DIVISA column (2024/2025) — parse COMENTARIOS
+        // Order matters: check 'bs tasa' before 'bs' alone
+        const c = comentario.toLowerCase();
+        if (c.includes('bs tasa') || c.includes('bolivares') || c.match(/\bbs\b/)) {
+          esUsd = false;
+        } else if (c.includes('divisa') || c.includes('efectivo') || c.includes('zelle') || c.includes('cash')) {
+          esUsd = true;
+        } else {
+          esUsd = false; // default = Bs
+        }
+      }
       return {
         fecha: r[fechaIdx],
         montoTotal: parseNum(r[montoIdx]),
         partners,
         bolivares: bsIdx >= 0 ? parseNum(r[bsIdx]) : 0,
-        divisa: divisaIdx >= 0 ? (r[divisaIdx] || '').trim() : '',
-        comentario: comentIdx >= 0 ? (r[comentIdx] || '').trim() : '',
+        divisa: esUsd ? 'SI' : 'NO',
+        comentario,
         year,
       };
     });
