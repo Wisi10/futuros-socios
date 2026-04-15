@@ -13,6 +13,13 @@ export default function RootLayout({ children }) {
   return (
     <html lang="es">
       <head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#B8963E" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Futuros Socios" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <link rel="icon" href="/favicon.ico" />
         <script src="https://cdn.tailwindcss.com"></script>
         <style
           dangerouslySetInnerHTML={{
@@ -68,6 +75,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         {children}
+        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js')}` }} />
       </body>
     </html>
   );
