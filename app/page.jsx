@@ -1,9 +1,9 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from './lib/supabase';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, LineController, PointElement, ArcElement, Tooltip, Legend, Filler } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
-import { Loader2, LogOut } from 'lucide-react';
+import { Loader2, LogOut, RefreshCw } from 'lucide-react';
 import React from 'react';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, LineController, PointElement, ArcElement, Tooltip, Legend, Filler);
@@ -480,10 +480,23 @@ export default function Home(){
   const [session,setSession]=useState(null);const [loading,setLoading]=useState(true);
   const [tab,setTab]=useState(0);const [data,setData]=useState(null);
   const [dl,setDl]=useState(false);const [err,setErr]=useState('');
+  const lastFetchRef=useRef(0);
 
   useEffect(()=>{supabase.auth.getSession().then(({data:{session:s}})=>{setSession(s);setLoading(false)});const{data:{subscription}}=supabase.auth.onAuthStateChange((_,s)=>setSession(s));return()=>subscription.unsubscribe()},[]);
-  const fetchData=useCallback(async(tk)=>{setDl(true);setErr('');try{const r=await fetch('/api/dashboard',{headers:{Authorization:`Bearer ${tk}`}});if(!r.ok)throw new Error('Error cargando datos');setData(await r.json())}catch(e){setErr(e.message)}finally{setDl(false)}},[]);
+  const fetchData=useCallback(async(tk)=>{setDl(true);setErr('');try{const r=await fetch('/api/dashboard',{headers:{Authorization:`Bearer ${tk}`}});if(!r.ok)throw new Error('Error cargando datos');setData(await r.json());lastFetchRef.current=Date.now()}catch(e){setErr(e.message)}finally{setDl(false)}},[]);
   useEffect(()=>{if(session?.access_token)fetchData(session.access_token)},[session,fetchData]);
+
+  // Auto-refresh on tab visibility: if >5min since last fetch, refetch
+  useEffect(()=>{
+    const onVisible=()=>{
+      if(document.visibilityState==='visible' && session?.access_token){
+        const elapsed=Date.now()-lastFetchRef.current;
+        if(elapsed>5*60*1000) fetchData(session.access_token);
+      }
+    };
+    document.addEventListener('visibilitychange',onVisible);
+    return()=>document.removeEventListener('visibilitychange',onVisible);
+  },[session,fetchData]);
 
   if(loading)return <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:T.bg}}><Loader2 size={20} className="animate-spin" style={{color:T.gold}}/></div>;
   if(!session)return <LoginScreen onLogin={s=>setSession(s)}/>;
@@ -498,7 +511,10 @@ export default function Home(){
           <div style={{width:34,height:34,background:T.gold,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center'}}><span style={{color:'#FFF',fontSize:15,fontWeight:400,fontFamily:T.se}}>F</span></div>
           <div><div style={{fontSize:14,fontWeight:400,color:T.ch,fontFamily:T.se,letterSpacing:'-0.3px'}}>Futuros Socios</div><div style={{fontSize:9,color:T.mu,letterSpacing:'2px',textTransform:'uppercase',fontFamily:T.sa}}>{pk} — {fmtPct(pp)}</div></div>
         </div>
-        <button onClick={async()=>{await supabase.auth.signOut();setSession(null);setData(null)}} style={{background:'none',border:'none',cursor:'pointer',padding:8,opacity:0.5,transition:`opacity 0.3s ${ease}`}} onMouseEnter={e=>e.target.style.opacity=1} onMouseLeave={e=>e.target.style.opacity=0.5}><LogOut size={16} color={T.mu}/></button>
+        <div style={{display:'flex',alignItems:'center',gap:4}}>
+          <button onClick={()=>session?.access_token&&fetchData(session.access_token)} disabled={dl} title="Actualizar datos" style={{background:'none',border:'none',cursor:dl?'wait':'pointer',padding:8,opacity:dl?0.3:0.5,transition:`opacity 0.3s ${ease}`}} onMouseEnter={e=>!dl&&(e.currentTarget.style.opacity=1)} onMouseLeave={e=>!dl&&(e.currentTarget.style.opacity=0.5)}><RefreshCw size={16} color={T.mu} className={dl?'animate-spin':''}/></button>
+          <button onClick={async()=>{await supabase.auth.signOut();setSession(null);setData(null)}} style={{background:'none',border:'none',cursor:'pointer',padding:8,opacity:0.5,transition:`opacity 0.3s ${ease}`}} onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0.5}><LogOut size={16} color={T.mu}/></button>
+        </div>
       </div>
       <div style={{maxWidth:1100,margin:'0 auto',display:'flex',gap:24,padding:'0 24px',borderTop:'0.5px solid rgba(212,201,184,0.3)'}}>
         {tabs.map((t,i)=><button key={i} onClick={()=>setTab(i)} style={{background:'none',border:'none',padding:'10px 0',fontSize:12,fontWeight:500,cursor:'pointer',letterSpacing:'1.5px',textTransform:'uppercase',fontFamily:T.sa,color:tab===i?T.gold:T.mu,position:'relative',transition:`color 0.3s ${ease}`}}>

@@ -137,11 +137,11 @@ export async function GET(request) {
       fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,duration_hours'),
       fetchAllRows('payments', 'id,booking_id,amount_eur,currency,method,created_at'),
       supabase.from('exchange_rates').select('eur_rate,usd_rate,created_at').order('created_at', { ascending: false }).limit(1),
-      getSheetData(SHEET_ID, 'Dividendos 2024!A1:T49').catch(() => ({ values: [] })),
-      getSheetData(SHEET_ID, 'Dividendos 2025!A1:T49').catch(() => ({ values: [] })),
-      getSheetData(SHEET_ID, 'Dividendos 2026!A1:T49').catch(() => ({ values: [] })),
-      getSheetData(SHEET_ID, 'ROI!A1:H20').catch(() => ({ values: [] })),
-      getSheetData(SHEET_ID, 'Totales Historicos!A1:G20').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Dividendos 2024!A:T').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Dividendos 2025!A:T').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Dividendos 2026!A:T').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'ROI!A:H').catch(() => ({ values: [] })),
+      getSheetData(SHEET_ID, 'Totales Historicos!A:G').catch(() => ({ values: [] })),
     ]);
 
     const rateRow = exchangeRateRes.data?.[0];
