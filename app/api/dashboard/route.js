@@ -25,9 +25,17 @@ async function fetchAllRows(table, select = '*', filters = {}) {
 
 function parseNum(val) {
   if (!val) return 0;
-  const s = String(val).replace(/[$,]/g, '').trim();
+  const s = String(val).replace(/[$€,\s]/g, '').replace(/Bs/gi, '').trim();
   const n = parseFloat(s);
   return isNaN(n) ? 0 : n;
+}
+
+function normalizeFecha(raw) {
+  const s = (raw || '').toString().trim();
+  if (/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return s;
+  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return null;
 }
 
 // Find all partner $ columns in headers: "RAMZI $", "WISI $", etc.
@@ -53,8 +61,9 @@ function parseDividendSheet(rows, year) {
   const comentIdx = headers.findIndex(h => h && h.trim() === 'COMENTARIOS');
 
   return rows.slice(1)
-    .filter(r => r[fechaIdx] && /^\d{2}\/\d{2}\/\d{4}$/.test(r[fechaIdx].trim()))
-    .map(r => {
+    .map(r => ({ r, fecha: normalizeFecha(r[fechaIdx]) }))
+    .filter(x => x.fecha !== null)
+    .map(({ r, fecha }) => {
       const partners = {};
       for (const [name, idx] of Object.entries(partnerCols)) {
         partners[name] = parseNum(r[idx]);
@@ -62,7 +71,7 @@ function parseDividendSheet(rows, year) {
       const metodo = metodoIdx >= 0 ? (r[metodoIdx] || '').trim() : '';
       const comentario = comentIdx >= 0 ? (r[comentIdx] || '').trim() : '';
       return {
-        fecha: r[fechaIdx],
+        fecha,
         montoTotal: parseNum(r[montoIdx]),
         partners,
         bolivares: 0,
@@ -129,13 +138,15 @@ export async function GET(request) {
     }
 
     const [
-      bookings, courts, historicalSales, payments, exchangeRateRes,
+      bookings, courts, historicalSales, payments, cancellations, clients, exchangeRateRes,
       div2024Res, div2025Res, div2026Res, roiRes, totalesRes,
     ] = await Promise.all([
-      fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration,client_name'),
+      fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration,client_id,client_name'),
       supabase.from('courts').select('*').order('id'),
       fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,duration_hours'),
       fetchAllRows('payments', 'id,booking_id,amount_eur,currency,method,created_at'),
+      fetchAllRows('cancellations', 'booking_id'),
+      fetchAllRows('clients', 'id,first_name,last_name,is_concession'),
       supabase.from('exchange_rates').select('eur_rate,usd_rate,created_at').order('created_at', { ascending: false }).limit(1),
       getSheetData(SHEET_ID, 'Dividendos 2024!A:T').catch(() => ({ values: [] })),
       getSheetData(SHEET_ID, 'Dividendos 2025!A:T').catch(() => ({ values: [] })),
@@ -153,6 +164,8 @@ export async function GET(request) {
       courts: courts.data || [],
       historicalSales,
       payments,
+      cancellations,
+      clients,
       exchangeRate,
       dividends: {
         2024: parseDividendSheet(div2024Res.values || [], 2024),

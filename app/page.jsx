@@ -85,17 +85,27 @@ function LoginScreen({onLogin}){
 // TAB 1 — EL COMPLEJO
 // ═══════════════════════════════════════════════════════════════
 function TabComplejo({data}){
-  const {bookings,courts,historicalSales,payments,exchangeRate}=data;
+  const {bookings,courts,historicalSales,payments,cancellations,clients,exchangeRate}=data;
   const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1,today=now.toISOString().slice(0,10),dom=now.getDate();
-  const yb=useMemo(()=>bookings.filter(b=>b.date?.startsWith(String(cy))&&b.date<=today&&b.activity_type!=='blocked'),[bookings,cy,today]);
 
-  // Monthly revenue: HS where available, bookings otherwise
-  const mr=useMemo(()=>{const m=Array(12).fill(0);const hs=new Set();(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy))).forEach(s=>{const mo=gm(s.sale_date);if(mo){m[mo-1]+=(s.total_ref||0);hs.add(mo)}});yb.forEach(b=>{const mo=gm(b.date);if(mo&&!hs.has(mo))m[mo-1]+=(b.price_eur||0)});return m},[yb,historicalSales,cy]);
+  // Index payments by booking_id; sum paid amounts respecting refunds (mimics reports getTotalPaid).
+  const paidByBooking=useMemo(()=>{const m={};(payments||[]).forEach(p=>{const id=p.booking_id;if(!id)return;const amt=parseFloat(p.amount_eur)||0;const sign=p.method==='refund'?-1:1;m[id]=(m[id]||0)+sign*amt});return m},[payments]);
+  const getPaid=id=>paidByBooking[id]||0;
+
+  // Excluded bookings: cancelled, blocked, concession (alianzas shells like FVFC/Liga Cumbres), test (Wisam).
+  const cancelledIds=useMemo(()=>new Set((cancellations||[]).map(c=>c.booking_id)),[cancellations]);
+  const excludedClientIds=useMemo(()=>{const s=new Set();(clients||[]).forEach(c=>{if(c.is_concession)s.add(c.id);const fn=(c.first_name||'').toLowerCase().trim();const ln=(c.last_name||'').toLowerCase().trim();if(fn==='wisam'&&ln==='souki')s.add(c.id)});return s},[clients]);
+  const isValidBooking=b=>b.activity_type!=='blocked'&&!cancelledIds.has(b.id)&&!excludedClientIds.has(b.client_id);
+
+  const yb=useMemo(()=>bookings.filter(b=>b.date?.startsWith(String(cy))&&b.date<=today&&isValidBooking(b)),[bookings,cy,today,cancelledIds,excludedClientIds]);
+
+  // Monthly revenue: historical_sales + bookings paid (NOT mutually exclusive — March 2026 has both during cutover).
+  const mr=useMemo(()=>{const m=Array(12).fill(0);(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy))).forEach(s=>{const mo=gm(s.sale_date);if(mo)m[mo-1]+=(s.total_ref||0)});yb.forEach(b=>{const mo=gm(b.date);if(mo)m[mo-1]+=getPaid(b.id)});return m},[yb,historicalSales,cy,paidByBooking]);
   const pmr=useMemo(()=>{const m=Array(12).fill(0);(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const mo=gm(s.sale_date);if(mo)m[mo-1]+=(s.total_ref||0)});return m},[historicalSales,cy]);
   const tmr=mr[cm-1]||0;const tr=useMemo(()=>mr.reduce((s,v)=>s+v,0),[mr]);
 
-  // Fair comparisons
-  const prevMonthSameDay=useMemo(()=>{const pm=cm>1?cm-1:12,pmY=cm>1?cy:cy-1;let t=0;(historicalSales||[]).filter(s=>{if(!s.sale_date)return false;const y=parseInt(s.sale_date.substring(0,4)),m=gm(s.sale_date),d=gd(s.sale_date);return y===pmY&&m===pm&&d<=dom}).forEach(s=>t+=(s.total_ref||0));const pmStr=`${pmY}-${String(pm).padStart(2,'0')}`;bookings.filter(b=>b.date?.startsWith(pmStr)&&gd(b.date)<=dom&&b.activity_type!=='blocked').forEach(b=>t+=(b.price_eur||0));return t},[historicalSales,bookings,cy,cm,dom]);
+  // Fair comparisons — use paid amounts, exclude cancelled/concession/test.
+  const prevMonthSameDay=useMemo(()=>{const pm=cm>1?cm-1:12,pmY=cm>1?cy:cy-1;let t=0;(historicalSales||[]).filter(s=>{if(!s.sale_date)return false;const y=parseInt(s.sale_date.substring(0,4)),m=gm(s.sale_date),d=gd(s.sale_date);return y===pmY&&m===pm&&d<=dom}).forEach(s=>t+=(s.total_ref||0));const pmStr=`${pmY}-${String(pm).padStart(2,'0')}`;bookings.filter(b=>b.date?.startsWith(pmStr)&&gd(b.date)<=dom&&isValidBooking(b)).forEach(b=>t+=getPaid(b.id));return t},[historicalSales,bookings,cy,cm,dom,paidByBooking,cancelledIds,excludedClientIds]);
   const sameMonthLY=useMemo(()=>{let t=0;(historicalSales||[]).filter(s=>{if(!s.sale_date)return false;const y=parseInt(s.sale_date.substring(0,4)),m=gm(s.sale_date),d=gd(s.sale_date);return y===cy-1&&m===cm&&d<=dom}).forEach(s=>t+=(s.total_ref||0));return t},[historicalSales,cy,cm,dom]);
   const momG=pctOf(tmr,prevMonthSameDay);const yoyMG=pctOf(tmr,sameMonthLY);
   const daysInMonth=new Date(cy,cm,0).getDate();const projMonth=dom>0?Math.round(tmr/dom*daysInMonth):0;
@@ -121,13 +131,13 @@ function TabComplejo({data}){
 
   // Court occupancy + types
   const ch=useMemo(()=>{const map={};(courts||[]).forEach(c=>{map[c.id]={name:c.name,type:c.type,hours:0}});yb.forEach(b=>(b.court_ids||[]).forEach(cid=>{if(map[cid])map[cid].hours+=(b.duration||0)}));return Object.values(map).sort((a,b)=>b.hours-a.hours)},[yb,courts]);
-  const typeBreakdown=useMemo(()=>{const map={};yb.forEach(b=>{const t=b.type||'otro';map[t]=(map[t]||0)+(b.price_eur||0)});return Object.entries(map).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])},[yb]);
+  const typeBreakdown=useMemo(()=>{const map={};yb.forEach(b=>{const t=b.type||'otro';map[t]=(map[t]||0)+getPaid(b.id)});return Object.entries(map).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])},[yb,paidByBooking]);
   const typeColors={F7:T.gold,F11:T.gd,F5:T.dv,F5T:'#A89A8A'};
   const pyRev=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy]);
   const pyTypeMap=useMemo(()=>{const map={};(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const t=s.court_type||'otro';map[t]=(map[t]||0)+(s.total_ref||0)});return map},[historicalSales,cy]);
 
   // Activity
-  const ab=useMemo(()=>{const m={};yb.forEach(b=>{const t=b.activity_type||'otro';m[t]=(m[t]||0)+(b.price_eur||0)});return m},[yb]);
+  const ab=useMemo(()=>{const m={};yb.forEach(b=>{const t=b.activity_type||'otro';m[t]=(m[t]||0)+getPaid(b.id)});return m},[yb,paidByBooking]);
   const abT=Object.values(ab).reduce((s,v)=>s+v,0);
   const aLbl={alquiler:'Alquiler',cumpleanos:'Cumpleanos',academia:'Academia',torneo:'Torneo',evento:'Evento',otro:'Otro'};
   const aClr=['#B8963E','#3D2B1F','#D4C9B8','#8B6914','#8C7E6F','#A89A8A'];
@@ -141,11 +151,11 @@ function TabComplejo({data}){
   const payByMethod=useMemo(()=>{const eur={amt:0,cnt:0},usd={amt:0,cnt:0},bs={amt:0,cnt:0};py26.forEach(p=>{const m=p.method||'';if(m==='pago_movil'||m==='cash_bs'){bs.amt+=(p.amount_eur||0);bs.cnt++}else if(m==='cash_usd'||m==='zelle'){usd.amt+=(p.amount_eur||0);usd.cnt++}else{eur.amt+=(p.amount_eur||0);eur.cnt++}});return{eur,usd,bs,tot:eur.amt+usd.amt+bs.amt}},[py26]);
 
   // Top clients
-  const topClients=useMemo(()=>{const map={};yb.forEach(b=>{const n=b.client_name||'Sin nombre';if(!map[n])map[n]={name:n,rev:0,cnt:0};map[n].rev+=(b.price_eur||0);map[n].cnt++});const sorted=Object.values(map).sort((a,b)=>b.rev-a.rev);const top6=sorted.slice(0,6);const otros=sorted.slice(6);const os=otros.reduce((s,c)=>s+c.rev,0),oc=otros.reduce((s,c)=>s+c.cnt,0);if(os>0)top6.push({name:'Otros',rev:os,cnt:oc});return top6},[yb]);
+  const topClients=useMemo(()=>{const map={};yb.forEach(b=>{const n=b.client_name||'Sin nombre';if(!map[n])map[n]={name:n,rev:0,cnt:0};map[n].rev+=getPaid(b.id);map[n].cnt++});const sorted=Object.values(map).filter(c=>c.rev>0).sort((a,b)=>b.rev-a.rev);const top6=sorted.slice(0,6);const otros=sorted.slice(6);const os=otros.reduce((s,c)=>s+c.rev,0),oc=otros.reduce((s,c)=>s+c.cnt,0);if(os>0)top6.push({name:'Otros',rev:os,cnt:oc});return top6},[yb,paidByBooking]);
   const tcTotal=topClients.reduce((s,c)=>s+c.rev,0);
   const tcClr=['#8B6914','#B8963E','#C4A95A','#D4C9B8','#DDD5C6','#E5DED2','#EDE8DF'];
   const uniqueClients=useMemo(()=>new Set(yb.map(b=>b.client_name).filter(Boolean)).size,[yb]);
-  const allCS=useMemo(()=>{const map={};yb.forEach(b=>{const n=b.client_name||'X';if(!map[n])map[n]={rev:0};map[n].rev+=(b.price_eur||0)});return Object.values(map).sort((a,b)=>b.rev-a.rev)},[yb]);
+  const allCS=useMemo(()=>{const map={};yb.forEach(b=>{const n=b.client_name||'X';if(!map[n])map[n]={rev:0};map[n].rev+=getPaid(b.id)});return Object.values(map).filter(c=>c.rev>0).sort((a,b)=>b.rev-a.rev)},[yb,paidByBooking]);
   const top3p=tcTotal>0?allCS.slice(0,3).reduce((s,c)=>s+c.rev,0)/tcTotal*100:0;
   const top5p=tcTotal>0?allCS.slice(0,5).reduce((s,c)=>s+c.rev,0)/tcTotal*100:0;
   const top10p=tcTotal>0?allCS.slice(0,10).reduce((s,c)=>s+c.rev,0)/tcTotal*100:0;
@@ -153,19 +163,26 @@ function TabComplejo({data}){
   const momLabel=MO[cm>1?cm-2:11].toLowerCase();
 
   return <div>
-    {/* KPIs Row 1 */}
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12}}>
-      {[
-        {label:`INGRESOS ${MO[cm-1].toUpperCase()}`,value:fmt(tmr),badges:[momG!=null?{v:cmpStr(momG),l:`vs ${momLabel} (d${dom})`}:null,yoyMG!=null?{v:cmpStr(yoyMG),l:`vs ${MO[cm-1].toLowerCase()} ${cy-1}`}:null].filter(Boolean),sub:`${dom} dias · ~${fmt(projMonth)} proy.`},
-        {label:'INGRESOS YTD',value:fmt(tr),badges:[yoyG!=null?{v:cmpStr(yoyG),l:`vs ${cy-1}`}:null].filter(Boolean),sub:`ene — ${MO[cm-1].toLowerCase()} ${dom}`},
-        {label:'TASA BCV',value:exchangeRate?`Bs ${Number(exchangeRate.eurRate).toLocaleString('es-VE',{maximumFractionDigits:0})}`:'—',badges:[],sub:'Bs por REF',color:T.ch},
-        {label:`OCUPACION ${MO[cm-1].toUpperCase()}`,value:`${tmH}h`,badges:[occG!=null?{v:cmpStr(occG),l:`vs ${momLabel} (d${dom})`}:null].filter(Boolean),sub:`${dom} dias`,color:T.ch},
-      ].map((k,i)=><div key={i} className="kpi-card card-hover" style={S.kpiCard}>
-        <div style={S.lbl}>{k.label}</div>
-        <div style={{...S.bigNum,fontSize:24,color:k.color||T.ch,marginTop:4}}>{k.value}</div>
-        <div style={{marginTop:8,display:'flex',flexWrap:'wrap',gap:4}}>{k.badges.map((b,j)=><Badge key={j} value={b.v} label={b.l}/>)}</div>
-        <div style={{...S.mono,fontSize:10,marginTop:4}}>{k.sub}</div>
-      </div>)}
+    {/* Resumen Financiero */}
+    <div>
+      <h3 style={{fontSize:13,fontWeight:500,color:T.mu,borderBottom:`0.5px solid ${T.dv}`,paddingBottom:6,marginBottom:14,fontFamily:T.sa,letterSpacing:'0.5px'}}>Resumen Financiero</h3>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(180px,1fr))',gap:12}}>
+        {[
+          {label:`Ingresos ${MO[cm-1]}`,value:fmt(tmr),valueColor:T.gr,change:momG!=null?cmpStr(momG):null,changeLabel:`vs ${momLabel} (d${dom})`,sub:projMonth>0?`Proyectado: ${fmt(projMonth)}`:null},
+          {label:'Ingresos YTD',value:fmt(tr),valueColor:T.gr,change:yoyG!=null?cmpStr(yoyG):null,changeLabel:`vs ${cy-1}`,sub:`ene — ${MO[cm-1].toLowerCase()} ${dom}`},
+          {label:`Ocupación ${MO[cm-1]}`,value:`${tmH}h`,valueColor:T.ch,change:occG!=null?cmpStr(occG):null,changeLabel:`vs ${momLabel} (d${dom})`,sub:`${dom} días`},
+          {label:'Tasa BCV',value:exchangeRate?`Bs ${Number(exchangeRate.eurRate).toLocaleString('es-VE',{maximumFractionDigits:0})}`:'—',valueColor:T.ch,change:null,changeLabel:null,sub:'Bs por REF'},
+        ].map((k,i)=>{
+          const isPos=k.change?.startsWith('+');const isNeg=k.change?.startsWith('-');
+          const changeColor=isPos?T.gr:isNeg?T.rd:T.mu;
+          return <div key={i} className="kpi-card card-hover" style={{background:T.card,borderRadius:12,border:`0.5px solid ${T.dv}`,padding:'12px 14px',boxShadow:'0 1px 4px rgba(0,0,0,0.03)'}}>
+            <div style={{fontSize:10,color:T.mu,textTransform:'uppercase',letterSpacing:'1px',fontFamily:T.sa,fontWeight:500}}>{k.label}</div>
+            <div style={{...S.bigNum,fontSize:22,color:k.valueColor,marginTop:6}}>{k.value}</div>
+            {k.change&&<div style={{fontSize:10,fontFamily:T.mo,color:changeColor,marginTop:4}}>{k.change} <span style={{color:T.mu}}>{k.changeLabel}</span></div>}
+            {k.sub&&<div style={{fontSize:10,fontFamily:T.mo,color:T.mu,marginTop:k.change?2:4}}>{k.sub}</div>}
+          </div>;
+        })}
+      </div>
     </div>
 
     {/* KPIs Row 2 */}
@@ -282,62 +299,67 @@ function TabComplejo({data}){
 // TAB 2 — MI PARTICIPACION
 // ═══════════════════════════════════════════════════════════════
 function TabParticipacion({data,partnerKey}){
-  const {dividends,roi,totales}=data;
+  const {dividends,roi,exchangeRate}=data;
   const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;const pk=partnerKey;
-  const myRoi=roi?.[pk]||{};const myTot=totales?.[pk]||{};
+  const myRoi=roi?.[pk]||{};
   const inv=myRoi.montoInvertido||0;const pct=myRoi.participacion||0;
+  // Currency normalization: Bs-method rows are in EUR; USD-method rows are in USD cash.
+  // Investment was made in USD ($). Convert USD-native dividends + investment to EUR for ROI.
+  const usdToEur=u=>{const er=exchangeRate?.eurRate,ur=exchangeRate?.usdRate;return(er>0&&ur>0)?u*ur/er:u};
+  const pAmtE=d=>{const raw=pAmt(d,pk);return d.divisa==='SI'?usdToEur(raw):raw};
+  const fmtE=(n,d=0)=>n==null||isNaN(n)?'€0':'€'+Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const fmtU=(n,d=0)=>n==null||isNaN(n)?'$0':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const invEur=usdToEur(inv);
   const allDivs=[...(dividends[2024]||[]),...(dividends[2025]||[]),...(dividends[2026]||[])];
-  const totalDiv=myRoi.dividendosRecibidos||allDivs.reduce((s,d)=>s+pAmt(d,pk),0);
-  const roiPct=myRoi.roiPct||(inv>0?(totalDiv/inv*100):0);
-  const pbPct=inv>0?Math.min(100,(totalDiv/inv)*100):0;
-  const ytdDiv=(dividends[cy]||[]).reduce((s,d)=>s+pAmt(d,pk),0);
-  const pySame=(dividends[cy-1]||[]).filter(d=>{const m=gm(d.fecha);return m&&m<=cm}).reduce((s,d)=>s+pAmt(d,pk),0);
+  const totalDiv=allDivs.reduce((s,d)=>s+pAmtE(d),0);
+  const roiPct=invEur>0?(totalDiv/invEur*100):0;
+  const pbPct=invEur>0?Math.min(100,(totalDiv/invEur)*100):0;
+  const ytdDiv=(dividends[cy]||[]).reduce((s,d)=>s+pAmtE(d),0);
+  const pySame=(dividends[cy-1]||[]).filter(d=>{const m=gm(d.fecha);return m&&m<=cm}).reduce((s,d)=>s+pAmtE(d),0);
   const ytdG=pctOf(ytdDiv,pySame);
-  const mwD=new Set((dividends[cy]||[]).filter(d=>pAmt(d,pk)>0).map(d=>gm(d.fecha)).filter(Boolean)).size;
-  const avgM=mwD>0?ytdDiv/mwD:0;const rem=inv-totalDiv;
-  const mtpb=myRoi.mesesRestantes||(avgM>0?Math.ceil(Math.max(0,rem)/avgM):null);
-  const mDiv=useMemo(()=>{const m=Array(12).fill(0);(dividends[cy]||[]).forEach(d=>{const mo=gm(d.fecha);if(mo)m[mo-1]+=pAmt(d,pk)});return m},[dividends,cy,pk]);
-  const mDiv25=useMemo(()=>{const m=Array(12).fill(0);(dividends[cy-1]||[]).forEach(d=>{const mo=gm(d.fecha);if(mo)m[mo-1]+=pAmt(d,pk)});return m},[dividends,cy,pk]);
-  const yTot=[myTot.total2024||(dividends[2024]||[]).reduce((s,d)=>s+pAmt(d,pk),0),myTot.total2025||(dividends[2025]||[]).reduce((s,d)=>s+pAmt(d,pk),0),myTot.total2026||(dividends[2026]||[]).reduce((s,d)=>s+pAmt(d,pk),0)];
-  const mBreak=useMemo(()=>{const map={};(dividends[cy]||[]).forEach(d=>{const m=gm(d.fecha);const a=pAmt(d,pk);if(m&&a>0){if(!map[m])map[m]={month:m,amt:0,cnt:0};map[m].amt+=a;map[m].cnt++}});return Object.values(map).sort((a,b)=>a.month-b.month)},[dividends,cy,pk]);
+  const mwD=new Set((dividends[cy]||[]).filter(d=>pAmtE(d)>0).map(d=>gm(d.fecha)).filter(Boolean)).size;
+  const avgM=mwD>0?ytdDiv/mwD:0;const rem=invEur-totalDiv;
+  const mtpb=avgM>0?Math.ceil(Math.max(0,rem)/avgM):null;
+  const mDiv=useMemo(()=>{const m=Array(12).fill(0);(dividends[cy]||[]).forEach(d=>{const mo=gm(d.fecha);if(mo)m[mo-1]+=pAmtE(d)});return m},[dividends,cy,pk,exchangeRate]);
+  const mDiv25=useMemo(()=>{const m=Array(12).fill(0);(dividends[cy-1]||[]).forEach(d=>{const mo=gm(d.fecha);if(mo)m[mo-1]+=pAmtE(d)});return m},[dividends,cy,pk,exchangeRate]);
+  const yTot=[(dividends[2024]||[]).reduce((s,d)=>s+pAmtE(d),0),(dividends[2025]||[]).reduce((s,d)=>s+pAmtE(d),0),(dividends[2026]||[]).reduce((s,d)=>s+pAmtE(d),0)];
+  const mBreak=useMemo(()=>{const map={};(dividends[cy]||[]).forEach(d=>{const m=gm(d.fecha);const a=pAmtE(d);if(m&&a>0){if(!map[m])map[m]={month:m,amt:0,cnt:0};map[m].amt+=a;map[m].cnt++}});return Object.values(map).sort((a,b)=>a.month-b.month)},[dividends,cy,pk,exchangeRate]);
   const bestMo=mBreak.length>0?mBreak.reduce((a,b)=>b.amt>a.amt?b:a):null;
-  const divUsd=allDivs.filter(d=>d.divisa==='SI').reduce((s,d)=>s+pAmt(d,pk),0);
-  const divBs=allDivs.filter(d=>d.divisa!=='SI').reduce((s,d)=>s+pAmt(d,pk),0);const divT=divUsd+divBs;
 
   return <div>
     {/* Hero ROI */}
     <div className="fade-up card-hover" style={{...S.card,borderLeft:`4px solid ${T.gold}`}}>
       <div style={S.lbl}>ROI — MI PARTICIPACION</div>
       <div style={{...S.bigNum,fontSize:36,color:T.gold,marginTop:8}}>{fmtPct(roiPct)}</div>
-      <div style={{...S.mono,marginTop:8}}>{fmt(totalDiv)} de {fmt(inv)}</div>
+      <div style={{...S.mono,marginTop:8}}>{fmtE(totalDiv)} de {fmtU(inv)} <span style={{fontSize:10,color:T.mu}}>(≈{fmtE(invEur)})</span></div>
       {/* Progress bar */}
       {inv>0&&<div style={{marginTop:16}}>
         <div style={{height:6,background:'rgba(212,201,184,0.35)',borderRadius:6,overflow:'hidden'}}>
           <div className="bar-grow" style={{width:`${pbPct}%`,height:6,background:`linear-gradient(90deg, ${T.gd}, ${T.gold}, ${T.goldLight})`,borderRadius:6}}/>
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}><span style={{...S.mono,fontSize:10}}>$0</span><span style={{...S.mono,fontSize:10}}>{fmt(inv)}</span></div>
+        <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}><span style={{...S.mono,fontSize:10}}>€0</span><span style={{...S.mono,fontSize:10}}>{fmtU(inv)}</span></div>
       </div>}
     </div>
 
     {/* KPIs */}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginTop:12}}>
-      {[{l:fmtPct(pct),s:'Participacion'},{l:fmt(inv),s:'Invertido'},{l:fmt(totalDiv),s:'Recibido'},{l:rem>0?`-${fmt(rem)}`:`+${fmt(Math.abs(rem))}`,s:'Neto',c:rem>0?T.rd:T.gr}].map((k,i)=><div key={i} className="kpi-card card-hover" style={S.kpiCard}><div style={S.lbl}>{k.s}</div><div style={{...S.bigNum,fontSize:20,color:k.c||T.ch,marginTop:4}}>{k.l}</div></div>)}
+      {[{l:fmtPct(pct),s:'Participacion'},{l:fmtU(inv),s:'Invertido'},{l:fmtE(totalDiv),s:'Recibido'},{l:rem>0?`-${fmtE(rem)}`:`+${fmtE(Math.abs(rem))}`,s:'Neto',c:rem>0?T.rd:T.gr}].map((k,i)=><div key={i} className="kpi-card card-hover" style={S.kpiCard}><div style={S.lbl}>{k.s}</div><div style={{...S.bigNum,fontSize:20,color:k.c||T.ch,marginTop:4}}>{k.l}</div></div>)}
     </div>
 
-    {inv>0&&<div style={{...S.mono,marginTop:12,textAlign:'center'}}>~{mtpb||'—'} meses restantes al ritmo actual ({fmt(avgM)}/mes)</div>}
+    {inv>0&&<div style={{...S.mono,marginTop:12,textAlign:'center'}}>~{mtpb||'—'} meses restantes al ritmo actual ({fmtE(avgM)}/mes)</div>}
 
     {/* Dividendos YTD + Promedio */}
     <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:20}}>
-      <div className="card-hover" style={S.kpiCard}><div style={S.lbl}>DIVIDENDOS {cy}</div><div style={{...S.bigNum,fontSize:22,color:T.ch,marginTop:4}}>{fmt(ytdDiv)}</div>{ytdG!=null&&<div style={{marginTop:6}}><Badge value={cmpStr(ytdG)} label={`vs ${cy-1}`}/></div>}</div>
-      <div className="card-hover" style={S.kpiCard}><div style={S.lbl}>PROMEDIO/MES</div><div style={{...S.bigNum,fontSize:22,color:T.ch,marginTop:4}}>{fmt(avgM)}</div><div style={{...S.mono,fontSize:10,marginTop:6}}>{mwD} meses con pagos</div></div>
+      <div className="card-hover" style={S.kpiCard}><div style={S.lbl}>DIVIDENDOS {cy}</div><div style={{...S.bigNum,fontSize:22,color:T.ch,marginTop:4}}>{fmtE(ytdDiv)}</div>{ytdG!=null&&<div style={{marginTop:6}}><Badge value={cmpStr(ytdG)} label={`vs ${cy-1}`}/></div>}</div>
+      <div className="card-hover" style={S.kpiCard}><div style={S.lbl}>PROMEDIO/MES</div><div style={{...S.bigNum,fontSize:22,color:T.ch,marginTop:4}}>{fmtE(avgM)}</div><div style={{...S.mono,fontSize:10,marginTop:6}}>{mwD} meses con pagos</div></div>
     </div>
 
     {/* Desglose Mensual */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>DESGLOSE MENSUAL {cy}</div>
-      <div style={{marginTop:12}}>{mBreak.map((mb,i)=><div key={i} style={{...S.row,borderBottom:i<mBreak.length-1?`0.5px solid rgba(212,201,184,0.3)`:'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{MO[mb.month-1]} <span style={{color:T.mu}}>({mb.cnt} pagos)</span></span><span style={{...S.moB,color:bestMo&&mb.month===bestMo.month?T.gr:T.ch}}>{fmt(mb.amt)}</span></div>)}
-        <div style={{borderTop:`1px solid ${T.dv}`,marginTop:10,paddingTop:10,display:'flex',justifyContent:'space-between'}}><span style={{fontSize:12,fontWeight:700,fontFamily:T.sa,color:T.ch}}>Total {cy} YTD</span><span style={{...S.moB,fontSize:14}}>{fmt(ytdDiv)}</span></div>
+      <div style={{marginTop:12}}>{mBreak.map((mb,i)=><div key={i} style={{...S.row,borderBottom:i<mBreak.length-1?`0.5px solid rgba(212,201,184,0.3)`:'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{MO[mb.month-1]} <span style={{color:T.mu}}>({mb.cnt} pagos)</span></span><span style={{...S.moB,color:bestMo&&mb.month===bestMo.month?T.gr:T.ch}}>{fmtE(mb.amt)}</span></div>)}
+        <div style={{borderTop:`1px solid ${T.dv}`,marginTop:10,paddingTop:10,display:'flex',justifyContent:'space-between'}}><span style={{fontSize:12,fontWeight:700,fontFamily:T.sa,color:T.ch}}>Total {cy} YTD</span><span style={{...S.moB,fontSize:14}}>{fmtE(ytdDiv)}</span></div>
       </div>
     </div>
 
@@ -346,7 +368,7 @@ function TabParticipacion({data,partnerKey}){
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>MIS DIVIDENDOS — {cy-1} VS {cy}</div>
       <div style={{height:200,marginTop:16}}>
-        <Bar data={{labels:MO,datasets:[{label:String(cy-1),data:mDiv25,backgroundColor:T.dv,borderRadius:10,borderSkipped:false,barPercentage:0.8,categoryPercentage:0.7},{label:String(cy),data:mDiv.map((v,i)=>i<cm?v:null),backgroundColor:T.gold,borderRadius:10,borderSkipped:false,barPercentage:0.8,categoryPercentage:0.7}]}} options={{...CO,scales:{...CO.scales,y:{...CO.scales.y,ticks:{...CO.scales.y.ticks,callback:v=>`$${v.toLocaleString()}`}}}}}/>
+        <Bar data={{labels:MO,datasets:[{label:String(cy-1),data:mDiv25,backgroundColor:T.dv,borderRadius:10,borderSkipped:false,barPercentage:0.8,categoryPercentage:0.7},{label:String(cy),data:mDiv.map((v,i)=>i<cm?v:null),backgroundColor:T.gold,borderRadius:10,borderSkipped:false,barPercentage:0.8,categoryPercentage:0.7}]}} options={{...CO,scales:{...CO.scales,y:{...CO.scales.y,ticks:{...CO.scales.y.ticks,callback:v=>`€${v.toLocaleString()}`}}},plugins:{...CO.plugins,tooltip:{...CO.plugins.tooltip,callbacks:{label:c=>`€${c.raw?.toLocaleString()}`}}}}}/>
       </div>
       <Leg items={[{label:String(cy-1),color:T.dv},{label:String(cy),color:T.gold}]}/>
     </div>
@@ -356,35 +378,25 @@ function TabParticipacion({data,partnerKey}){
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>COMPARACION ANUAL</div>
       <div style={{height:180,marginTop:16}}>
-        <Bar data={{labels:['2024','2025','2026 YTD'],datasets:[{data:yTot,backgroundColor:[T.dv,T.gold,T.gd],borderRadius:10,borderSkipped:false,barThickness:60}]}} options={CO}/>
+        <Bar data={{labels:['2024','2025','2026 YTD'],datasets:[{data:yTot,backgroundColor:[T.dv,T.gold,T.gd],borderRadius:10,borderSkipped:false,barThickness:60}]}} options={{...CO,scales:{...CO.scales,y:{...CO.scales.y,ticks:{...CO.scales.y.ticks,callback:v=>`€${(v/1000).toFixed(0)}K`}}},plugins:{...CO.plugins,tooltip:{...CO.plugins.tooltip,callbacks:{label:c=>`€${c.raw?.toLocaleString()}`}}}}}/>
       </div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',marginTop:16}}>{['2024','2025','2026 YTD'].map((y,i)=><div key={y} style={{textAlign:'center'}}><div style={S.moB}>{fmt(yTot[i])}</div><div style={{fontSize:10,color:T.mu,marginTop:2,fontFamily:T.sa}}>{y}</div></div>)}</div>
-    </div>
-
-    {/* Composicion Bs/USD */}
-    <div style={S.div}/>
-    <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>COMPOSICION DE DIVIDENDOS — {pk}</div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:16}}>
-        <div style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>BOLIVARES</div><div style={{...S.bigNum,fontSize:20,color:T.ch}}>{fmt(divBs)}</div><div style={{...S.mono,fontSize:10,marginTop:4}}>{divT>0?fmtPct(divBs/divT*100):'0%'}</div></div>
-        <div style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>USD CASH</div><div style={{...S.bigNum,fontSize:20,color:T.gd}}>{fmt(divUsd)}</div><div style={{...S.mono,fontSize:10,marginTop:4}}>{divT>0?fmtPct(divUsd/divT*100):'0%'}</div></div>
-      </div>
-      <div style={{...S.mono,fontSize:9,marginTop:8,textAlign:'center'}}>Clasificado por metodo de pago (2024-25: comentarios, 2026: columna DIVISA)</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',marginTop:16}}>{['2024','2025','2026 YTD'].map((y,i)=><div key={y} style={{textAlign:'center'}}><div style={S.moB}>{fmtE(yTot[i])}</div><div style={{fontSize:10,color:T.mu,marginTop:2,fontFamily:T.sa}}>{y}</div></div>)}</div>
     </div>
 
     {/* Ultimos Pagos */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>ULTIMOS PAGOS</div>
-      <div style={{display:'flex',padding:'8px 0',borderBottom:`1px solid ${T.dv}`,marginTop:8}}><span style={{...S.lbl,flex:1,marginBottom:0}}>FECHA</span><span style={{...S.lbl,width:120,textAlign:'right',marginBottom:0}}>TOTAL</span><span style={{...S.lbl,width:36,textAlign:'center',marginBottom:0}}>DIV</span><span style={{...S.lbl,width:70,textAlign:'right',marginBottom:0}}>MI PARTE</span></div>
-      {[...(dividends[cy]||[])].reverse().slice(0,10).map((d,i)=>{const myAmt=pAmt(d,pk);const isUsd=d.divisa==='SI';const totalEst=pct>0?Math.round(myAmt/(pct/100)):0;
+      <div style={{display:'flex',padding:'8px 0',borderBottom:`1px solid ${T.dv}`,marginTop:8}}><span style={{...S.lbl,flex:1,marginBottom:0}}>FECHA</span><span style={{...S.lbl,width:120,textAlign:'right',marginBottom:0}}>TOTAL</span><span style={{...S.lbl,width:40,textAlign:'center',marginBottom:0}}>PAGO</span><span style={{...S.lbl,width:70,textAlign:'right',marginBottom:0}}>MI PARTE</span></div>
+      {[...(dividends[cy]||[])].reverse().slice(0,10).map((d,i)=>{const myAmt=pAmt(d,pk);const isUsd=d.divisa==='SI';const sym=isUsd?'$':'€';const totalEst=pct>0?myAmt/(pct/100):0;const totalNative=d.montoTotal>0?d.montoTotal:totalEst;
         return <div key={i} style={{display:'flex',padding:'7px 0',borderBottom:`0.5px solid rgba(212,201,184,0.3)`,alignItems:'center'}}>
           <span style={{...S.mono,fontSize:11,flex:1}}>{d.fecha}</span>
-          <span style={{...S.mono,fontSize:10,width:120,textAlign:'right'}}>{isUsd?fmt(d.montoTotal>0?d.montoTotal:totalEst):d.bolivares>0?`Bs ${Number(d.bolivares).toLocaleString('es-VE',{maximumFractionDigits:0})}`:fmt(totalEst)}</span>
-          <span style={{fontSize:9,fontFamily:T.sa,color:isUsd?T.gd:T.mu,width:36,textAlign:'center',fontWeight:600}}>{isUsd?'USD':'Bs'}</span>
-          <span style={{...S.moB,width:70,textAlign:'right'}}>{fmt(myAmt,2)}</span>
+          <span style={{...S.mono,fontSize:10,width:120,textAlign:'right'}}>{sym}{Number(totalNative).toLocaleString('en-US',{maximumFractionDigits:0})}</span>
+          <span style={{fontSize:9,fontFamily:T.sa,color:isUsd?T.gd:T.mu,width:40,textAlign:'center',fontWeight:600}}>{isUsd?'USD':'Bs'}</span>
+          <span style={{...S.moB,width:70,textAlign:'right'}}>{sym}{Number(myAmt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
         </div>
       })}
+      <div style={{...S.mono,fontSize:9,marginTop:10,textAlign:'center'}}>PAGO = método. El monto está en € si fue pagado en Bs, o en $ si fue cash divisa.</div>
     </div>
 
     {/* Resumen */}
@@ -392,11 +404,12 @@ function TabParticipacion({data,partnerKey}){
     <div className="section-enter" style={S.card}>
       <div style={S.lbl}>RESUMEN</div>
       <p style={{fontSize:12,lineHeight:1.8,color:T.ch,fontFamily:T.sa,margin:'12px 0 0'}}>
-        En {mwD} meses de {cy}, {pk} ha recibido <b style={{fontFamily:T.mo}}>{fmt(ytdDiv)}</b> en dividendos, a un promedio de <b style={{fontFamily:T.mo}}>{fmt(avgM)}</b>/mes.
-        {bestMo&&<> El mejor mes fue <b>{MO[bestMo.month-1]}</b> con <b style={{fontFamily:T.mo}}>{fmt(bestMo.amt)}</b>.</>}
-        {inv>0&&<> ROI acumulado: <b>{fmtPct(roiPct)}</b> sobre <b style={{fontFamily:T.mo}}>{fmt(inv)}</b>.</>}
+        En {mwD} meses de {cy}, {pk} ha recibido <b style={{fontFamily:T.mo}}>{fmtE(ytdDiv)}</b> en dividendos, a un promedio de <b style={{fontFamily:T.mo}}>{fmtE(avgM)}</b>/mes.
+        {bestMo&&<> El mejor mes fue <b>{MO[bestMo.month-1]}</b> con <b style={{fontFamily:T.mo}}>{fmtE(bestMo.amt)}</b>.</>}
+        {inv>0&&<> ROI acumulado: <b>{fmtPct(roiPct)}</b> sobre <b style={{fontFamily:T.mo}}>{fmtU(inv)}</b> invertido (≈{fmtE(invEur)}).</>}
         {mtpb!=null&&rem>0&&<> Payback estimado en ~<b>{mtpb} meses</b>.</>}
       </p>
+      {exchangeRate?.eurRate>0&&exchangeRate?.usdRate>0&&<p style={{...S.mono,fontSize:9,marginTop:10,textAlign:'center'}}>USD cash convertido a € usando tasa actual ({(exchangeRate.usdRate/exchangeRate.eurRate).toFixed(3)} €/$)</p>}
     </div>
   </div>;
 }
@@ -405,43 +418,33 @@ function TabParticipacion({data,partnerKey}){
 // TAB 3 — PROYECCIONES
 // ═══════════════════════════════════════════════════════════════
 function TabProyecciones({data,partnerKey}){
-  const {dividends,roi,bookings,courts,historicalSales}=data;
+  const {dividends,roi,bookings,courts,exchangeRate}=data;
   const now=new Date(),cy=now.getFullYear(),cm=now.getMonth()+1;const pk=partnerKey;const myRoi=roi?.[pk]||{};const pct=myRoi.participacion||0;
   const inv=myRoi.montoInvertido||0;
-  const tDiv=myRoi.dividendosRecibidos||[...(dividends[2024]||[]),...(dividends[2025]||[]),...(dividends[2026]||[])].reduce((s,d)=>s+pAmt(d,pk),0);
-  const ytdDiv=(dividends[cy]||[]).reduce((s,d)=>s+pAmt(d,pk),0);
-  const dM=new Set((dividends[cy]||[]).filter(d=>pAmt(d,pk)>0).map(d=>gm(d.fecha)).filter(Boolean)).size;
-  const curM=dM>0?ytdDiv/dM:0;const rem=Math.max(0,inv-tDiv);
+  // Investment is in USD. Convert USD-native dividends + investment to EUR for apples-to-apples.
+  const usdToEur=u=>{const er=exchangeRate?.eurRate,ur=exchangeRate?.usdRate;return(er>0&&ur>0)?u*ur/er:u};
+  const pAmtE=d=>{const raw=pAmt(d,pk);return d.divisa==='SI'?usdToEur(raw):raw};
+  const fmtE=(n,d=0)=>n==null||isNaN(n)?'€0':'€'+Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const fmtU=(n,d=0)=>n==null||isNaN(n)?'$0':'$'+Number(n).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const invEur=usdToEur(inv);
+  const tDiv=[...(dividends[2024]||[]),...(dividends[2025]||[]),...(dividends[2026]||[])].reduce((s,d)=>s+pAmtE(d),0);
+  const ytdDiv=(dividends[cy]||[]).reduce((s,d)=>s+pAmtE(d),0);
+  const dM=new Set((dividends[cy]||[]).filter(d=>pAmtE(d)>0).map(d=>gm(d.fecha)).filter(Boolean)).size;
+  const curM=dM>0?ytdDiv/dM:0;const rem=Math.max(0,invEur-tDiv);
   const sc=[{name:'Conservador',monthly:Math.round(curM*0.7)||800,color:T.dv,desc:'Ritmo reducido'},{name:'Base',monthly:Math.round(curM)||1000,color:T.gold,desc:'Ritmo actual'},{name:'Optimista',monthly:Math.round(curM*1.4)||1500,color:T.gd,desc:'Con mejoras'}];
-  const proj=sc.map(s=>({...s,roi1y:inv>0?((tDiv+s.monthly*12)/inv*100):0,roi2y:inv>0?((tDiv+s.monthly*24)/inv*100):0,roi3y:inv>0?((tDiv+s.monthly*36)/inv*100):0,pbM:rem>0&&s.monthly>0?Math.ceil(rem/s.monthly):0}));
+  const proj=sc.map(s=>({...s,roi1y:invEur>0?((tDiv+s.monthly*12)/invEur*100):0,roi2y:invEur>0?((tDiv+s.monthly*24)/invEur*100):0,roi3y:invEur>0?((tDiv+s.monthly*36)/invEur*100):0,pbM:rem>0&&s.monthly>0?Math.ceil(rem/s.monthly):0}));
   const r2y=rem>0?Math.ceil(rem/24):0,r3y=rem>0?Math.ceil(rem/36):0,r4y=rem>0?Math.ceil(rem/48):0;
-  const mToEoy=12-cm;const roiE=inv>0?(tDiv+curM*mToEoy)/inv*100:0;const roiE1=inv>0?(tDiv+curM*(mToEoy+12))/inv*100:0;const roiE2=inv>0?(tDiv+curM*(mToEoy+24))/inv*100:0;
+  const mToEoy=12-cm;const roiE=invEur>0?(tDiv+curM*mToEoy)/invEur*100:0;const roiE1=invEur>0?(tDiv+curM*(mToEoy+12))/invEur*100:0;const roiE2=invEur>0?(tDiv+curM*(mToEoy+24))/invEur*100:0;
   const today=now.toISOString().slice(0,10);const yb=bookings.filter(b=>b.date?.startsWith(String(cy))&&b.date<=today&&b.activity_type!=='blocked');
-  const annRev=cm>0?yb.reduce((s,b)=>s+(b.price_eur||0),0)/cm*12:0;const cVal=annRev*10;const myVal=cVal*pct/100;const unr=myVal-inv;
-  const chMap={};(courts||[]).forEach(c=>{chMap[c.id]={name:c.name,type:c.type,hours:0}});yb.forEach(b=>(b.court_ids||[]).forEach(cid=>{if(chMap[cid])chMap[cid].hours+=(b.duration||0)}));
-  const under=Object.values(chMap).sort((a,b)=>a.hours-b.hours).filter(c=>c.hours<60);
-  const cBd=yb.filter(b=>b.activity_type==='cumpleanos').length+(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy))&&s.activity_type==='cumpleanos').length;const bdAvg=cm>0?cBd/cm:0;
+  const annRev=cm>0?yb.reduce((s,b)=>s+(b.price_eur||0),0)/cm*12:0;const cVal=annRev*10;const myVal=cVal*pct/100;const unr=myVal-invEur;
 
   return <div>
-    {/* Palancas */}
-    <div className="fade-up card-hover" style={S.card}>
-      <div style={S.lbl}>PALANCAS DE CRECIMIENTO</div>
-      <div style={{marginTop:12}}>
-        {[{t:'Mas Cumpleanos',d:`Actual: ${bdAvg.toFixed(1)}/mes. 2025: ~10/mes. Cada uno = ~REF 300-500.`},
-          ...(under.length>0?[{t:'Activar Canchas Subutilizadas',d:`${under.map(c=>c.name).join(', ')} con <60h YTD.`}]:[]),
-          {t:'Cobrar Pendientes',d:'Reducir morosidad mejora dividendos.'},
-          {t:'Cantina + Eventos',d:'Ingresos adicionales al fondo distribuible.'}
-        ].map((l,i,a)=><div key={i} style={{...S.row,borderBottom:i<a.length-1?'0.5px solid rgba(212,201,184,0.3)':'none'}}><div><div style={{fontSize:12,fontWeight:600,color:T.ch,fontFamily:T.sa}}>{l.t}</div><div style={{...S.mono,fontSize:10,marginTop:2}}>{l.d}</div></div></div>)}
-      </div>
-    </div>
-
     {inv>0&&<>
     {/* Scenarios — 3 column grid */}
-    <div style={S.div}/>
     <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:12}}>
     {proj.map((s,i)=><div key={i} className="card-hover" style={{...S.card,padding:'1rem',borderLeft:`3px solid ${s.color}`,...(i===1?{border:`1.5px solid ${T.gold}`,borderLeft:`3px solid ${T.gold}`}:{})}}>
       <div style={{...S.lbl,fontSize:8,marginBottom:4}}>{s.name}</div>
-      <div style={{...S.bigNum,fontSize:22,color:s.color}}>{fmt(s.monthly)}<span style={{...S.mono,fontSize:10,fontWeight:400}}>/mes</span></div>
+      <div style={{...S.bigNum,fontSize:22,color:s.color}}>{fmtE(s.monthly)}<span style={{...S.mono,fontSize:10,fontWeight:400}}>/mes</span></div>
       <div style={{...S.mono,fontSize:9,marginTop:2,marginBottom:12}}>{s.desc}</div>
       {[{l:'PAYBACK',v:s.pbM>0?`${s.pbM}m`:'Listo'},{l:'ROI 1A',v:fmtPct(s.roi1y)},{l:'ROI 2A',v:fmtPct(s.roi2y)},{l:'ROI 3A',v:fmtPct(s.roi3y)}].map((it,j)=><div key={j} style={{display:'flex',justifyContent:'space-between',padding:'4px 0',borderTop:j===0?`0.5px solid rgba(212,201,184,0.3)`:'none'}}><span style={{fontSize:9,color:T.mu,fontFamily:T.sa,textTransform:'uppercase',letterSpacing:'1px'}}>{it.l}</span><span style={{...S.moB,fontSize:12}}>{it.v}</span></div>)}
     </div>)}
@@ -451,7 +454,7 @@ function TabProyecciones({data,partnerKey}){
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>RITMO NECESARIO PARA PAYBACK</div>
-      <div style={{marginTop:12}}>{[{y:'2 anos',v:r2y},{y:'3 anos',v:r3y},{y:'4 anos',v:r4y}].map((r,i)=><div key={i} style={{...S.row,borderBottom:i<2?'0.5px solid rgba(212,201,184,0.3)':'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>Payback en {r.y}</span><span style={S.moB}>{fmt(r.v)}/mes</span></div>)}</div>
+      <div style={{marginTop:12}}>{[{y:'2 anos',v:r2y},{y:'3 anos',v:r3y},{y:'4 anos',v:r4y}].map((r,i)=><div key={i} style={{...S.row,borderBottom:i<2?'0.5px solid rgba(212,201,184,0.3)':'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>Payback en {r.y}</span><span style={S.moB}>{fmtE(r.v)}/mes</span></div>)}</div>
     </div>
 
     {/* ROI Proyectado */}
@@ -467,7 +470,7 @@ function TabProyecciones({data,partnerKey}){
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>VALOR DE PARTICIPACION HOY</div>
-      <div style={{marginTop:12}}>{[{l:'Inversion original',v:fmt(inv)},{l:'Dividendos recibidos',v:`+${fmt(tDiv)}`,c:T.gr},{l:'Valor estimado complejo (10x rev.)',v:fmt(cVal)},{l:`Tu ${fmtPct(pct)}`,v:fmt(myVal),b:true},{l:'Ganancia no realizada',v:unr>=0?`+${fmt(unr)}`:`-${fmt(Math.abs(unr))}`,c:unr>=0?T.gr:T.rd,b:true}].map((r,i)=><div key={i} style={{...S.row,borderBottom:i<4?'0.5px solid rgba(212,201,184,0.3)':'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{r.l}</span><span style={{...S.moB,...(r.b?{fontSize:14}:{}),color:r.c||T.ch}}>{r.v}</span></div>)}</div>
+      <div style={{marginTop:12}}>{[{l:'Inversion original',v:fmtU(inv)},{l:'Dividendos recibidos',v:`+${fmtE(tDiv)}`,c:T.gr},{l:'Valor estimado complejo (10x rev.)',v:fmtE(cVal)},{l:`Tu ${fmtPct(pct)}`,v:fmtE(myVal),b:true},{l:'Ganancia no realizada',v:unr>=0?`+${fmtE(unr)}`:`-${fmtE(Math.abs(unr))}`,c:unr>=0?T.gr:T.rd,b:true}].map((r,i)=><div key={i} style={{...S.row,borderBottom:i<4?'0.5px solid rgba(212,201,184,0.3)':'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{r.l}</span><span style={{...S.moB,...(r.b?{fontSize:14}:{}),color:r.c||T.ch}}>{r.v}</span></div>)}</div>
     </div>
     </>}
   </div>;
