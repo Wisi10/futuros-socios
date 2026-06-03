@@ -143,7 +143,7 @@ export async function GET(request) {
     ] = await Promise.all([
       fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration,client_id,client_name'),
       supabase.from('courts').select('*').order('id'),
-      fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,duration_hours'),
+      fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,amount_paid,duration_hours'),
       fetchAllRows('payments', 'id,booking_id,amount_eur,currency,method,created_at'),
       fetchAllRows('cancellations', 'booking_id'),
       fetchAllRows('clients', 'id,first_name,last_name,is_concession'),

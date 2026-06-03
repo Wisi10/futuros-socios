@@ -100,16 +100,16 @@ function TabComplejo({data}){
   const yb=useMemo(()=>bookings.filter(b=>b.date?.startsWith(String(cy))&&b.date<=today&&isValidBooking(b)),[bookings,cy,today,cancelledIds,excludedClientIds]);
 
   // Monthly revenue: historical_sales + bookings paid (NOT mutually exclusive — March 2026 has both during cutover).
-  const mr=useMemo(()=>{const m=Array(12).fill(0);(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy))).forEach(s=>{const mo=gm(s.sale_date);if(mo)m[mo-1]+=(s.total_ref||0)});yb.forEach(b=>{const mo=gm(b.date);if(mo)m[mo-1]+=getPaid(b.id)});return m},[yb,historicalSales,cy,paidByBooking]);
-  const pmr=useMemo(()=>{const m=Array(12).fill(0);(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const mo=gm(s.sale_date);if(mo)m[mo-1]+=(s.total_ref||0)});return m},[historicalSales,cy]);
+  const mr=useMemo(()=>{const m=Array(12).fill(0);(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy))).forEach(s=>{const mo=gm(s.sale_date);if(mo)m[mo-1]+=(s.amount_paid||0)});yb.forEach(b=>{const mo=gm(b.date);if(mo)m[mo-1]+=getPaid(b.id)});return m},[yb,historicalSales,cy,paidByBooking]);
+  const pmr=useMemo(()=>{const m=Array(12).fill(0);(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const mo=gm(s.sale_date);if(mo)m[mo-1]+=(s.amount_paid||0)});return m},[historicalSales,cy]);
   const tmr=mr[cm-1]||0;const tr=useMemo(()=>mr.reduce((s,v)=>s+v,0),[mr]);
 
   // Fair comparisons — use paid amounts, exclude cancelled/concession/test.
-  const prevMonthSameDay=useMemo(()=>{const pm=cm>1?cm-1:12,pmY=cm>1?cy:cy-1;let t=0;(historicalSales||[]).filter(s=>{if(!s.sale_date)return false;const y=parseInt(s.sale_date.substring(0,4)),m=gm(s.sale_date),d=gd(s.sale_date);return y===pmY&&m===pm&&d<=dom}).forEach(s=>t+=(s.total_ref||0));const pmStr=`${pmY}-${String(pm).padStart(2,'0')}`;bookings.filter(b=>b.date?.startsWith(pmStr)&&gd(b.date)<=dom&&isValidBooking(b)).forEach(b=>t+=getPaid(b.id));return t},[historicalSales,bookings,cy,cm,dom,paidByBooking,cancelledIds,excludedClientIds]);
-  const sameMonthLY=useMemo(()=>{let t=0;(historicalSales||[]).filter(s=>{if(!s.sale_date)return false;const y=parseInt(s.sale_date.substring(0,4)),m=gm(s.sale_date),d=gd(s.sale_date);return y===cy-1&&m===cm&&d<=dom}).forEach(s=>t+=(s.total_ref||0));return t},[historicalSales,cy,cm,dom]);
+  const prevMonthSameDay=useMemo(()=>{const pm=cm>1?cm-1:12,pmY=cm>1?cy:cy-1;let t=0;(historicalSales||[]).filter(s=>{if(!s.sale_date)return false;const y=parseInt(s.sale_date.substring(0,4)),m=gm(s.sale_date),d=gd(s.sale_date);return y===pmY&&m===pm&&d<=dom}).forEach(s=>t+=(s.amount_paid||0));const pmStr=`${pmY}-${String(pm).padStart(2,'0')}`;bookings.filter(b=>b.date?.startsWith(pmStr)&&gd(b.date)<=dom&&isValidBooking(b)).forEach(b=>t+=getPaid(b.id));return t},[historicalSales,bookings,cy,cm,dom,paidByBooking,cancelledIds,excludedClientIds]);
+  const sameMonthLY=useMemo(()=>{let t=0;(historicalSales||[]).filter(s=>{if(!s.sale_date)return false;const y=parseInt(s.sale_date.substring(0,4)),m=gm(s.sale_date),d=gd(s.sale_date);return y===cy-1&&m===cm&&d<=dom}).forEach(s=>t+=(s.amount_paid||0));return t},[historicalSales,cy,cm,dom]);
   const momG=pctOf(tmr,prevMonthSameDay);const yoyMG=pctOf(tmr,sameMonthLY);
   const daysInMonth=new Date(cy,cm,0).getDate();const projMonth=dom>0?Math.round(tmr/dom*daysInMonth):0;
-  const pySameYTD=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))&&s.sale_date<=`${cy-1}${today.substring(4)}`).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy,today]);
+  const pySameYTD=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))&&s.sale_date<=`${cy-1}${today.substring(4)}`).reduce((s,r)=>s+(r.amount_paid||0),0),[historicalSales,cy,today]);
   const yoyG=pctOf(tr,pySameYTD);
 
   // Occupancy
@@ -133,8 +133,8 @@ function TabComplejo({data}){
   const ch=useMemo(()=>{const map={};(courts||[]).forEach(c=>{map[c.id]={name:c.name,type:c.type,hours:0}});yb.forEach(b=>(b.court_ids||[]).forEach(cid=>{if(map[cid])map[cid].hours+=(b.duration||0)}));return Object.values(map).sort((a,b)=>b.hours-a.hours)},[yb,courts]);
   const typeBreakdown=useMemo(()=>{const map={};yb.forEach(b=>{const t=b.type||'otro';map[t]=(map[t]||0)+getPaid(b.id)});return Object.entries(map).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])},[yb,paidByBooking]);
   const typeColors={F7:T.gold,F11:T.gd,F5:T.dv,F5T:'#A89A8A'};
-  const pyRev=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales,cy]);
-  const pyTypeMap=useMemo(()=>{const map={};(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const t=s.court_type||'otro';map[t]=(map[t]||0)+(s.total_ref||0)});return map},[historicalSales,cy]);
+  const pyRev=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).reduce((s,r)=>s+(r.amount_paid||0),0),[historicalSales,cy]);
+  const pyTypeMap=useMemo(()=>{const map={};(historicalSales||[]).filter(s=>s.sale_date?.startsWith(String(cy-1))).forEach(s=>{const t=s.court_type||'otro';map[t]=(map[t]||0)+(s.amount_paid||0)});return map},[historicalSales,cy]);
 
   // Activity
   const ab=useMemo(()=>{const m={};yb.forEach(b=>{const t=b.activity_type||'otro';m[t]=(m[t]||0)+getPaid(b.id)});return m},[yb,paidByBooking]);
@@ -143,7 +143,7 @@ function TabComplejo({data}){
   const aClr=['#B8963E','#3D2B1F','#D4C9B8','#8B6914','#8C7E6F','#A89A8A'];
 
   // Historical
-  const rev24=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith('2024')).reduce((s,r)=>s+(r.total_ref||0),0),[historicalSales]);
+  const rev24=useMemo(()=>(historicalSales||[]).filter(s=>s.sale_date?.startsWith('2024')).reduce((s,r)=>s+(r.amount_paid||0),0),[historicalSales]);
   const rev25=pyRev,rev26=tr;const proj26=cm>0?Math.round(rev26/cm*12):0;
 
   // Payments
