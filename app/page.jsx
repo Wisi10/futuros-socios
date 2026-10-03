@@ -388,7 +388,7 @@ function TabParticipacion({data,partnerKey}){
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>ULTIMOS PAGOS</div>
       <div style={{display:'flex',padding:'8px 0',borderBottom:`1px solid ${T.dv}`,marginTop:8}}><span style={{...S.lbl,flex:1,marginBottom:0}}>FECHA</span><span style={{...S.lbl,width:120,textAlign:'right',marginBottom:0}}>TOTAL</span><span style={{...S.lbl,width:40,textAlign:'center',marginBottom:0}}>PAGO</span><span style={{...S.lbl,width:70,textAlign:'right',marginBottom:0}}>MI PARTE</span></div>
-      {[...(dividends[cy]||[])].reverse().slice(0,10).map((d,i)=>{const myAmt=pAmt(d,pk);const isUsd=d.divisa==='SI';const sym=isUsd?'$':'€';const totalEst=pct>0?myAmt/(pct/100):0;const totalNative=d.montoTotal>0?d.montoTotal:totalEst;
+      {[...(dividends[cy]||[])].sort((a,b)=>{const [da,ma,ya]=(a.fecha||'').split('/');const [db,mb,yb]=(b.fecha||'').split('/');return (yb+mb+db).localeCompare(ya+ma+da)}).slice(0,10).map((d,i)=>{const myAmt=pAmt(d,pk);const isUsd=d.divisa==='SI';const sym=isUsd?'$':'€';const totalEst=pct>0?myAmt/(pct/100):0;const totalNative=d.montoTotal>0?d.montoTotal:totalEst;
         return <div key={i} style={{display:'flex',padding:'7px 0',borderBottom:`0.5px solid rgba(212,201,184,0.3)`,alignItems:'center'}}>
           <span style={{...S.mono,fontSize:11,flex:1}}>{d.fecha}</span>
           <span style={{...S.mono,fontSize:10,width:120,textAlign:'right'}}>{sym}{Number(totalNative).toLocaleString('en-US',{maximumFractionDigits:0})}</span>
