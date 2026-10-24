@@ -1,17 +1,17 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
-import { supabase } from '../../lib/supabase-server';
+import { supabase, supabaseForUser } from '../../lib/supabase-server';
 import { getSheetData } from '../../lib/google-sheets';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
-async function fetchAllRows(table, select = '*', filters = {}) {
+async function fetchAllRows(db, table, select = '*', filters = {}) {
   const PAGE = 1000;
   let all = [];
   let from = 0;
   while (true) {
-    let q = supabase.from(table).select(select).range(from, from + PAGE - 1);
+    let q = db.from(table).select(select).range(from, from + PAGE - 1);
     for (const [key, val] of Object.entries(filters)) q = q.eq(key, val);
     const { data, error } = await q;
     if (error) throw error;
@@ -136,18 +136,21 @@ export async function GET(request) {
     if (authError || !user) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
+    // Las lecturas van con la sesion del socio, asi funcionan aunque la base
+    // no de acceso a usuarios anonimos.
+    const db = supabaseForUser(token);
 
     const [
       bookings, courts, historicalSales, payments, cancellations, clients, exchangeRateRes,
       div2024Res, div2025Res, div2026Res, roiRes, totalesRes,
     ] = await Promise.all([
-      fetchAllRows('bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration,client_id,client_name'),
-      supabase.from('courts').select('*').order('id'),
-      fetchAllRows('historical_sales', 'id,sale_date,court_type,activity_type,total_ref,amount_paid,duration_hours'),
-      fetchAllRows('payments', 'id,booking_id,amount_eur,currency,method,created_at'),
-      fetchAllRows('cancellations', 'booking_id'),
-      fetchAllRows('clients', 'id,first_name,last_name,is_concession'),
-      supabase.from('exchange_rates').select('eur_rate,usd_rate,created_at').order('created_at', { ascending: false }).limit(1),
+      fetchAllRows(db, 'bookings', 'id,date,court_ids,type,activity_type,price_eur,start_hour,duration,client_id,client_name'),
+      db.from('courts').select('*').order('id'),
+      fetchAllRows(db, 'historical_sales', 'id,sale_date,court_type,activity_type,total_ref,amount_paid,duration_hours'),
+      fetchAllRows(db, 'payments', 'id,booking_id,amount_eur,currency,method,created_at'),
+      fetchAllRows(db, 'cancellations', 'booking_id'),
+      fetchAllRows(db, 'clients', 'id,first_name,last_name,is_concession'),
+      db.from('exchange_rates').select('eur_rate,usd_rate,created_at').order('created_at', { ascending: false }).limit(1),
       getSheetData(SHEET_ID, 'Dividendos 2024!A:T').catch(() => ({ values: [] })),
       getSheetData(SHEET_ID, 'Dividendos 2025!A:T').catch(() => ({ values: [] })),
       getSheetData(SHEET_ID, 'Dividendos 2026!A:T').catch(() => ({ values: [] })),
