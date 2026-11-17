@@ -69,11 +69,11 @@ function LoginScreen({onLogin}){
       <div style={{textAlign:'center',marginBottom:48}}>
         <div style={{width:52,height:52,background:T.gold,borderRadius:16,display:'inline-flex',alignItems:'center',justifyContent:'center',marginBottom:16}}><span style={{color:'#FFF',fontSize:22,fontWeight:400,fontFamily:T.se}}>F</span></div>
         <h1 style={{fontSize:18,fontWeight:400,color:T.ch,fontFamily:T.se,margin:0,letterSpacing:'-0.3px'}}>Futuros Socios</h1>
-        <p style={{color:T.mu,fontSize:11,marginTop:6,fontFamily:T.sa,letterSpacing:'1px'}}>DASHBOARD DE INVERSION</p>
+        <p style={{color:T.mu,fontSize:11,marginTop:6,fontFamily:T.sa,letterSpacing:'1px'}}>DASHBOARD DE INVERSIÓN</p>
       </div>
       <form onSubmit={go} style={{display:'flex',flexDirection:'column',gap:12}}>
         <input type="text" placeholder="Usuario" value={user} onChange={e=>setUser(e.target.value)} style={inp} required autoCapitalize="none" autoCorrect="off"/>
-        <input type="password" placeholder="Contrasena" value={pw} onChange={e=>setPw(e.target.value)} style={inp} required/>
+        <input type="password" placeholder="Contraseña" value={pw} onChange={e=>setPw(e.target.value)} style={inp} required/>
         {err&&<p style={{color:T.rd,fontSize:12,textAlign:'center',margin:0}}>{err}</p>}
         <button type="submit" disabled={ld} style={{width:'100%',padding:13,borderRadius:12,border:'none',background:T.gold,color:'#FFF',fontSize:11,fontWeight:600,fontFamily:T.sa,cursor:'pointer',letterSpacing:'1.5px',textTransform:'uppercase',opacity:ld?.5:1,display:'flex',alignItems:'center',justifyContent:'center',gap:8,transition:`all 0.3s ${ease}`}}>{ld?<Loader2 size={14} className="animate-spin"/>:'ENTRAR'}</button>
       </form>
@@ -139,7 +139,8 @@ function TabComplejo({data}){
   // Activity
   const ab=useMemo(()=>{const m={};yb.forEach(b=>{const t=b.activity_type||'otro';m[t]=(m[t]||0)+getPaid(b.id)});return m},[yb,paidByBooking]);
   const abT=Object.values(ab).reduce((s,v)=>s+v,0);
-  const aLbl={alquiler:'Alquiler',cumpleanos:'Cumpleanos',academia:'Academia',torneo:'Torneo',evento:'Evento',otro:'Otro'};
+  const aLbl={alquiler:'Alquiler',cumpleanos:'Cumpleaños',academia:'Academia',torneo:'Torneo',evento:'Evento',otro:'Otro'};
+  const actLbl=k=>aLbl[k]||String(k).replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
   const aClr=['#B8963E','#3D2B1F','#D4C9B8','#8B6914','#8C7E6F','#A89A8A'];
 
   // Historical
@@ -189,8 +190,8 @@ function TabComplejo({data}){
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))',gap:12,marginTop:12}}>
       {[
         {label:'RESERVAS SEMANA',value:twb.toString(),badges:[wG!=null?{v:cmpStr(wG),l:`vs sem. ant. (${dow}d)`}:null].filter(Boolean)},
-        {label:'CUMPLEANOS YTD',value:tbd.toString(),badges:[],sub:`${(cm>0?tbd/cm:0).toFixed(1)}/mes`},
-        {label:`CUMPLEANOS ${MO[cm-1].toUpperCase()}`,value:tmBd.toString(),badges:[{v:`${tmBd-lmBd>=0?'+':''}${tmBd-lmBd}`,l:`vs ${momLabel}`}],sub:null},
+        {label:'CUMPLEAÑOS YTD',value:tbd.toString(),badges:[],sub:`${(cm>0?tbd/cm:0).toFixed(1)}/mes`},
+        {label:`CUMPLEAÑOS ${MO[cm-1].toUpperCase()}`,value:tmBd.toString(),badges:[{v:`${tmBd-lmBd>=0?'+':''}${tmBd-lmBd}`,l:`vs ${momLabel}`}],sub:null},
       ].map((k,i)=><div key={i} className="kpi-card card-hover" style={S.kpiCard}>
         <div style={S.lbl}>{k.label}</div>
         <div style={{...S.bigNum,fontSize:24,color:T.ch,marginTop:4}}>{k.value}</div>
@@ -202,7 +203,7 @@ function TabComplejo({data}){
     {/* F7 vs F5 */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>DISTRIBUCION POR TIPO — {cy}</div>
+      <div style={S.lbl}>DISTRIBUCIÓN POR TIPO — {cy}</div>
       {typeBreakdown.map(([type,rev],i)=>{const pct=tr>0?rev/tr*100:0;const py=pyRev>0&&pyTypeMap[type]?(pyTypeMap[type]/pyRev*100):null;
         return <div key={type} style={{marginTop:i>0?14:12}}>
           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:5}}>
@@ -231,14 +232,14 @@ function TabComplejo({data}){
     {/* Rendimiento Historico */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>RENDIMIENTO HISTORICO</div>
+      <div style={S.lbl}>RENDIMIENTO HISTÓRICO</div>
       <div style={{height:180,marginTop:16}}>
         <Bar data={{labels:['2024','2025',`2026 YTD`],datasets:[{data:[rev24,rev25,rev26],backgroundColor:[T.dv,T.gold,T.gd],borderRadius:10,borderSkipped:false,barThickness:60}]}} options={CO}/>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',marginTop:16}}>
         {[{y:'2024',v:rev24},{y:'2025',v:rev25},{y:'2026 YTD',v:rev26}].map((r,i)=><div key={i} style={{textAlign:'center'}}><div style={S.moB}>{fmt(r.v)}</div><div style={{fontSize:10,color:T.mu,marginTop:2,fontFamily:T.sa}}>{r.y}</div></div>)}
       </div>
-      <div style={{...S.mono,textAlign:'center',marginTop:10,fontSize:10}}>Proyeccion {cy}: ~{fmt(proj26)}</div>
+      <div style={{...S.mono,textAlign:'center',marginTop:10,fontSize:10}}>Proyección {cy}: ~{fmt(proj26)}</div>
     </div>
 
     {/* Revenue Mix */}
@@ -247,17 +248,17 @@ function TabComplejo({data}){
       <div style={S.lbl}>TIPO DE ACTIVIDAD</div>
       <div style={{display:'flex',alignItems:'center',gap:24,marginTop:16}}>
         <div style={{width:120,height:120}}>
-          <Doughnut data={{labels:Object.keys(ab).map(k=>aLbl[k]||k),datasets:[{data:Object.values(ab),backgroundColor:aClr.slice(0,Object.keys(ab).length),borderWidth:0}]}} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'72%'}}/>
+          <Doughnut data={{labels:Object.keys(ab).map(k=>actLbl(k)),datasets:[{data:Object.values(ab),backgroundColor:aClr.slice(0,Object.keys(ab).length),borderWidth:0}]}} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'72%'}}/>
         </div>
-        <div style={{flex:1}}>{Object.entries(ab).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=><div key={k} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}><div style={{width:8,height:8,borderRadius:4,background:aClr[i],flexShrink:0}}/><span style={{flex:1,fontSize:11,color:T.ch,fontFamily:T.sa}}>{aLbl[k]||k}</span><span style={S.moB}>{fmt(v)}</span><span style={{...S.mono,fontSize:10,minWidth:36,textAlign:'right'}}>{abT>0?fmtPct(v/abT*100):'0%'}</span></div>)}</div>
+        <div style={{flex:1,minWidth:0}}>{Object.entries(ab).sort((a,b)=>b[1]-a[1]).map(([k,v],i)=><div key={k} style={{display:'flex',alignItems:'center',gap:8,marginBottom:6}}><div style={{width:8,height:8,borderRadius:4,background:aClr[i],flexShrink:0}}/><span style={{flex:1,fontSize:11,color:T.ch,fontFamily:T.sa,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',minWidth:0}}>{actLbl(k)}</span><span style={{...S.moB,flexShrink:0}}>{fmt(v)}</span><span style={{...S.mono,fontSize:10,width:40,flexShrink:0,textAlign:'right',whiteSpace:'nowrap'}}>{abT>0?fmtPct(v/abT*100):'0%'}</span></div>)}</div>
       </div>
     </div>
 
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>DISTRIBUCION POR TIPO DE PAGO — {cy}</div>
+      <div style={S.lbl}>DISTRIBUCIÓN POR TIPO DE PAGO — {cy}</div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10,marginTop:16}}>
-        {[{label:'REF',amt:payByMethod.eur.amt,cnt:payByMethod.eur.cnt,color:T.gold},{label:'USD',amt:payByMethod.usd.amt,cnt:payByMethod.usd.cnt,color:T.gd},{label:'Bolivares',amt:payByMethod.bs.amt,cnt:payByMethod.bs.cnt,color:T.dv}].map((p,i)=><div key={i} style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>{p.label}</div><div style={{...S.bigNum,fontSize:18,color:p.color}}>{fmt(p.amt)}</div><div style={{...S.mono,fontSize:9,marginTop:4}}>{p.cnt} pagos · {payByMethod.tot>0?fmtPct(p.amt/payByMethod.tot*100):'0%'}</div></div>)}
+        {[{label:'REF',amt:payByMethod.eur.amt,cnt:payByMethod.eur.cnt,color:T.gold},{label:'USD',amt:payByMethod.usd.amt,cnt:payByMethod.usd.cnt,color:T.gd},{label:'Bolívares',amt:payByMethod.bs.amt,cnt:payByMethod.bs.cnt,color:T.brn}].map((p,i)=><div key={i} style={S.mini}><div style={{...S.lbl,fontSize:8,marginBottom:8}}>{p.label}</div><div style={{...S.bigNum,fontSize:18,color:p.color}}>{fmt(p.amt)}</div><div style={{...S.mono,fontSize:9,marginTop:4,whiteSpace:'nowrap'}}>{p.cnt} pagos</div><div style={{...S.mono,fontSize:9,marginTop:2,whiteSpace:'nowrap'}}>{payByMethod.tot>0?fmtPct(p.amt/payByMethod.tot*100):'0%'}</div></div>)}
       </div>
     </div>
 
@@ -265,30 +266,30 @@ function TabComplejo({data}){
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>TOP CLIENTES — {cy}</div>
-      <div style={{display:'flex',alignItems:'center',gap:24,marginTop:16}}>
+      <div style={{display:'flex',alignItems:'center',gap:16,marginTop:16}}>
         <div style={{width:130,height:130,position:'relative',flexShrink:0}}>
           <Doughnut data={{labels:topClients.map(c=>c.name),datasets:[{data:topClients.map(c=>c.rev),backgroundColor:tcClr.slice(0,topClients.length),borderWidth:0}]}} options={{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{enabled:false}},cutout:'72%'}}/>
           <div style={{position:'absolute',top:'50%',left:'50%',transform:'translate(-50%,-50%)',textAlign:'center'}}><div style={{...S.bigNum,fontSize:14,color:T.ch}}>{fmt(tcTotal)}</div><div style={{fontSize:8,color:T.mu,fontFamily:T.sa}}>YTD</div></div>
         </div>
-        <div style={{flex:1}}>{topClients.map((c,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:6,marginBottom:5}}><div style={{width:7,height:7,borderRadius:4,background:tcClr[i],flexShrink:0}}/><span style={{flex:1,fontSize:10,color:T.ch,fontFamily:T.sa,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name}</span><span style={{...S.moB,fontSize:10}}>{fmt(c.rev)}</span><span style={{...S.mono,fontSize:9,minWidth:28,textAlign:'right'}}>{tcTotal>0?fmtPct(c.rev/tcTotal*100):'0%'}</span></div>)}</div>
+        <div style={{flex:1,minWidth:0}}>{topClients.map((c,i)=><div key={i} style={{display:'flex',alignItems:'center',gap:6,marginBottom:5}}><div style={{width:7,height:7,borderRadius:4,background:tcClr[i],flexShrink:0}}/><span style={{flex:1,minWidth:0,fontSize:10,color:T.ch,fontFamily:T.sa,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.name}</span><span style={{...S.moB,fontSize:10,flexShrink:0}}>{fmt(c.rev)}</span><span style={{...S.mono,fontSize:9,width:36,flexShrink:0,textAlign:'right',whiteSpace:'nowrap'}}>{tcTotal>0?fmtPct(c.rev/tcTotal*100):'0%'}</span></div>)}</div>
       </div>
       <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginTop:16}}>
-        {[{l:'Top 3',v:fmtPct(top3p)},{l:'Top 5',v:fmtPct(top5p)},{l:'Top 10',v:fmtPct(top10p)},{l:'Unicos',v:uniqueClients}].map((c,i)=><div key={i} style={S.mini}><div style={{fontSize:8,textTransform:'uppercase',letterSpacing:'1px',color:T.mu,fontFamily:T.sa}}>{c.l}</div><div style={{...S.bigNum,fontSize:14,color:T.ch,marginTop:4}}>{c.v}</div></div>)}
+        {[{l:'Top 3',v:fmtPct(top3p)},{l:'Top 5',v:fmtPct(top5p)},{l:'Top 10',v:fmtPct(top10p)},{l:'Únicos',v:uniqueClients}].map((c,i)=><div key={i} style={S.mini}><div style={{fontSize:8,textTransform:'uppercase',letterSpacing:'1px',color:T.mu,fontFamily:T.sa}}>{c.l}</div><div style={{...S.bigNum,fontSize:14,color:T.ch,marginTop:4}}>{c.v}</div></div>)}
       </div>
     </div>
 
     {/* Diagnostico */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>OCUPACION POR CANCHA — {cy}</div>
+      <div style={S.lbl}>OCUPACIÓN POR CANCHA — {cy}</div>
       <div style={{marginTop:16}}>{ch.map((c,i)=>{const mx=ch[0]?.hours||1;const occ=availPerCourt>0?(c.hours/availPerCourt*100):0;return <div key={i} style={{marginBottom:14}}><div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{c.name} <span style={{color:T.mu}}>({c.type})</span></span><div><span style={S.moB}>{c.hours}h</span><span style={{...S.mono,fontSize:10,marginLeft:6}}>({fmtPct(occ)})</span></div></div><div style={{background:'rgba(212,201,184,0.35)',borderRadius:6,height:8,overflow:'hidden'}}><div style={{width:`${(c.hours/mx)*100}%`,height:'100%',borderRadius:6,background:c.type==='F7'?T.gold:T.dv,transition:`width 0.8s ${ease}`}}/></div></div>})}</div>
     </div>
 
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>CUMPLEANOS POR MES — {cy}</div>
+      <div style={S.lbl}>CUMPLEAÑOS POR MES — {cy}</div>
       <div style={{height:160,marginTop:16}}>
-        <Bar data={{labels:MO,datasets:[{type:'line',label:'Prom 2025',data:Array(12).fill(10),borderColor:'#B71C1C55',borderDash:[4,4],borderWidth:1.5,pointRadius:0,fill:false,order:0},{label:String(cy),data:bdm,backgroundColor:T.brn,borderRadius:10,borderSkipped:false,barThickness:14,order:1}]}} options={{...CO,scales:{...CO.scales,y:{...CO.scales.y,ticks:{...CO.scales.y.ticks,stepSize:2,callback:v=>v}}}}}/>
+        <Bar data={{labels:MO,datasets:[{type:'line',label:'Prom 2025',data:Array(12).fill(10),borderColor:'#B71C1C55',borderDash:[4,4],borderWidth:1.5,pointRadius:0,fill:false,order:0},{label:String(cy),data:bdm,backgroundColor:T.brn,borderRadius:10,borderSkipped:false,barThickness:14,order:1}]}} options={{...CO,plugins:{...CO.plugins,tooltip:{...CO.plugins.tooltip,callbacks:{label:c=>c.dataset.type==='line'?`Promedio 2025: ${c.raw}`:`${c.raw} cumpleaños`}}},scales:{...CO.scales,y:{...CO.scales.y,ticks:{...CO.scales.y.ticks,stepSize:2,callback:v=>v}}}}}/>
       </div>
       <Leg items={[{label:String(cy),color:T.brn},{label:'Prom. 2025',color:T.rd,dashed:true}]}/>
     </div>
@@ -329,21 +330,22 @@ function TabParticipacion({data,partnerKey}){
   return <div>
     {/* Hero ROI */}
     <div className="fade-up card-hover" style={{...S.card,borderLeft:`4px solid ${T.gold}`}}>
-      <div style={S.lbl}>ROI — MI PARTICIPACION</div>
+      <div style={S.lbl}>ROI — MI PARTICIPACIÓN</div>
       <div style={{...S.bigNum,fontSize:36,color:T.gold,marginTop:8}}>{fmtPct(roiPct)}</div>
-      <div style={{...S.mono,marginTop:8}}>{fmtE(totalDiv)} de {fmtU(inv)} <span style={{fontSize:10,color:T.mu}}>(≈{fmtE(invEur)})</span></div>
+      <div style={{...S.mono,marginTop:8}}>{fmtE(totalDiv)} de {fmtE(invEur)}</div>
+      <div style={{...S.mono,fontSize:10,marginTop:4}}>{fmtU(inv)} invertidos</div>
       {/* Progress bar */}
       {inv>0&&<div style={{marginTop:16}}>
         <div style={{height:6,background:'rgba(212,201,184,0.35)',borderRadius:6,overflow:'hidden'}}>
           <div className="bar-grow" style={{width:`${pbPct}%`,height:6,background:`linear-gradient(90deg, ${T.gd}, ${T.gold}, ${T.goldLight})`,borderRadius:6}}/>
         </div>
-        <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}><span style={{...S.mono,fontSize:10}}>€0</span><span style={{...S.mono,fontSize:10}}>{fmtU(inv)}</span></div>
+        <div style={{display:'flex',justifyContent:'space-between',marginTop:6}}><span style={{...S.mono,fontSize:10}}>€0</span><span style={{...S.mono,fontSize:10}}>{fmtE(invEur)}</span></div>
       </div>}
     </div>
 
     {/* KPIs */}
     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:12,marginTop:12}}>
-      {[{l:fmtPct(pct),s:'Participacion'},{l:fmtU(inv),s:'Invertido'},{l:fmtE(totalDiv),s:'Recibido'},{l:rem>0?`-${fmtE(rem)}`:`+${fmtE(Math.abs(rem))}`,s:'Neto',c:rem>0?T.rd:T.gr}].map((k,i)=><div key={i} className="kpi-card card-hover" style={S.kpiCard}><div style={S.lbl}>{k.s}</div><div style={{...S.bigNum,fontSize:20,color:k.c||T.ch,marginTop:4}}>{k.l}</div></div>)}
+      {[{l:fmtPct(pct),s:'Participación'},{l:fmtU(inv),s:'Invertido'},{l:fmtE(totalDiv),s:'Recibido'},{l:rem>0?`-${fmtE(rem)}`:`+${fmtE(Math.abs(rem))}`,s:'Neto',c:rem>0?T.rd:T.gr}].map((k,i)=><div key={i} className="kpi-card card-hover" style={S.kpiCard}><div style={S.lbl}>{k.s}</div><div style={{...S.bigNum,fontSize:20,color:k.c||T.ch,marginTop:4}}>{k.l}</div></div>)}
     </div>
 
     {inv>0&&<div style={{...S.mono,marginTop:12,textAlign:'center'}}>~{mtpb||'—'} meses restantes al ritmo actual ({fmtE(avgM)}/mes)</div>}
@@ -376,7 +378,7 @@ function TabParticipacion({data,partnerKey}){
     {/* Comparacion Anual */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>COMPARACION ANUAL</div>
+      <div style={S.lbl}>COMPARACIÓN ANUAL</div>
       <div style={{height:180,marginTop:16}}>
         <Bar data={{labels:['2024','2025','2026 YTD'],datasets:[{data:yTot,backgroundColor:[T.dv,T.gold,T.gd],borderRadius:10,borderSkipped:false,barThickness:60}]}} options={{...CO,scales:{...CO.scales,y:{...CO.scales.y,ticks:{...CO.scales.y.ticks,callback:v=>`€${(v/1000).toFixed(0)}K`}}},plugins:{...CO.plugins,tooltip:{...CO.plugins.tooltip,callbacks:{label:c=>`€${c.raw?.toLocaleString()}`}}}}}/>
       </div>
@@ -386,14 +388,14 @@ function TabParticipacion({data,partnerKey}){
     {/* Ultimos Pagos */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>ULTIMOS PAGOS</div>
-      <div style={{display:'flex',padding:'8px 0',borderBottom:`1px solid ${T.dv}`,marginTop:8}}><span style={{...S.lbl,flex:1,marginBottom:0}}>FECHA</span><span style={{...S.lbl,width:120,textAlign:'right',marginBottom:0}}>TOTAL</span><span style={{...S.lbl,width:40,textAlign:'center',marginBottom:0}}>PAGO</span><span style={{...S.lbl,width:70,textAlign:'right',marginBottom:0}}>MI PARTE</span></div>
+      <div style={S.lbl}>ÚLTIMOS PAGOS</div>
+      <div style={{display:'flex',padding:'8px 0',borderBottom:`1px solid ${T.dv}`,marginTop:8}}><span style={{...S.lbl,flex:1,marginBottom:0}}>FECHA</span><span style={{...S.lbl,width:84,textAlign:'right',marginBottom:0,whiteSpace:'nowrap'}}>TOTAL</span><span style={{...S.lbl,width:48,textAlign:'center',marginBottom:0,whiteSpace:'nowrap'}}>PAGO</span><span style={{...S.lbl,width:84,textAlign:'right',marginBottom:0,whiteSpace:'nowrap'}}>MI PARTE</span></div>
       {[...(dividends[cy]||[])].sort((a,b)=>{const [da,ma,ya]=(a.fecha||'').split('/');const [db,mb,yb]=(b.fecha||'').split('/');return (yb+mb+db).localeCompare(ya+ma+da)}).slice(0,10).map((d,i)=>{const myAmt=pAmt(d,pk);const isUsd=d.divisa==='SI';const sym=isUsd?'$':'€';const totalEst=pct>0?myAmt/(pct/100):0;const totalNative=d.montoTotal>0?d.montoTotal:totalEst;
         return <div key={i} style={{display:'flex',padding:'7px 0',borderBottom:`0.5px solid rgba(212,201,184,0.3)`,alignItems:'center'}}>
           <span style={{...S.mono,fontSize:11,flex:1}}>{d.fecha}</span>
-          <span style={{...S.mono,fontSize:10,width:120,textAlign:'right'}}>{sym}{Number(totalNative).toLocaleString('en-US',{maximumFractionDigits:0})}</span>
-          <span style={{fontSize:9,fontFamily:T.sa,color:isUsd?T.gd:T.mu,width:40,textAlign:'center',fontWeight:600}}>{isUsd?'USD':'Bs'}</span>
-          <span style={{...S.moB,width:70,textAlign:'right'}}>{sym}{Number(myAmt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+          <span style={{...S.mono,fontSize:10,width:84,textAlign:'right',whiteSpace:'nowrap'}}>{sym}{Number(totalNative).toLocaleString('en-US',{maximumFractionDigits:0})}</span>
+          <span style={{fontSize:9,fontFamily:T.sa,color:isUsd?T.gd:T.mu,width:48,textAlign:'center',fontWeight:600}}>{isUsd?'USD':'Bs'}</span>
+          <span style={{...S.moB,width:84,textAlign:'right',whiteSpace:'nowrap'}}>{sym}{Number(myAmt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
         </div>
       })}
       <div style={{...S.mono,fontSize:9,marginTop:10,textAlign:'center'}}>PAGO = método. El monto está en € si fue pagado en Bs, o en $ si fue cash divisa.</div>
@@ -454,7 +456,7 @@ function TabProyecciones({data,partnerKey}){
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
       <div style={S.lbl}>RITMO NECESARIO PARA PAYBACK</div>
-      <div style={{marginTop:12}}>{[{y:'2 anos',v:r2y},{y:'3 anos',v:r3y},{y:'4 anos',v:r4y}].map((r,i)=><div key={i} style={{...S.row,borderBottom:i<2?'0.5px solid rgba(212,201,184,0.3)':'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>Payback en {r.y}</span><span style={S.moB}>{fmtE(r.v)}/mes</span></div>)}</div>
+      <div style={{marginTop:12}}>{[{y:'2 años',v:r2y},{y:'3 años',v:r3y},{y:'4 años',v:r4y}].map((r,i)=><div key={i} style={{...S.row,borderBottom:i<2?'0.5px solid rgba(212,201,184,0.3)':'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>Payback en {r.y}</span><span style={S.moB}>{fmtE(r.v)}/mes</span></div>)}</div>
     </div>
 
     {/* ROI Proyectado */}
@@ -469,8 +471,8 @@ function TabProyecciones({data,partnerKey}){
     {/* Valor */}
     <div style={S.div}/>
     <div className="section-enter card-hover" style={S.card}>
-      <div style={S.lbl}>VALOR DE PARTICIPACION HOY</div>
-      <div style={{marginTop:12}}>{[{l:'Inversion original',v:fmtU(inv)},{l:'Dividendos recibidos',v:`+${fmtE(tDiv)}`,c:T.gr},{l:'Valor estimado complejo (10x rev.)',v:fmtE(cVal)},{l:`Tu ${fmtPct(pct)}`,v:fmtE(myVal),b:true},{l:'Ganancia no realizada',v:unr>=0?`+${fmtE(unr)}`:`-${fmtE(Math.abs(unr))}`,c:unr>=0?T.gr:T.rd,b:true}].map((r,i)=><div key={i} style={{...S.row,borderBottom:i<4?'0.5px solid rgba(212,201,184,0.3)':'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{r.l}</span><span style={{...S.moB,...(r.b?{fontSize:14}:{}),color:r.c||T.ch}}>{r.v}</span></div>)}</div>
+      <div style={S.lbl}>VALOR DE PARTICIPACIÓN HOY</div>
+      <div style={{marginTop:12}}>{[{l:'Inversión original',v:fmtU(inv)},{l:'Dividendos recibidos',v:`+${fmtE(tDiv)}`,c:T.gr},{l:'Valor estimado complejo (10x rev.)',v:fmtE(cVal)},{l:`Tu ${fmtPct(pct)}`,v:fmtE(myVal),b:true},{l:'Ganancia no realizada',v:unr>=0?`+${fmtE(unr)}`:`-${fmtE(Math.abs(unr))}`,c:unr>=0?T.gr:T.rd,b:true}].map((r,i)=><div key={i} style={{...S.row,borderBottom:i<4?'0.5px solid rgba(212,201,184,0.3)':'none'}}><span style={{fontSize:12,fontFamily:T.sa,color:T.ch}}>{r.l}</span><span style={{...S.moB,...(r.b?{fontSize:14}:{}),color:r.c||T.ch}}>{r.v}</span></div>)}</div>
     </div>
     </>}
   </div>;
